@@ -1,56 +1,33 @@
-import { Container, Text } from 'pixi.js'
-import { createKeypad } from '../keypad.js'
-import { createGuessInput } from '../guess-input.js'
-import { createHistory } from '../history.js'
+export function createPlayScreen({ guessInput, keypad, historyModal }) {
+  const wrap = document.createElement('div')
+  wrap.className = 'min-h-screen flex flex-col items-center px-4 pt-16 pb-8'
 
-export function createPlayScreen({
-  engine, guessInput, keypad, history,
-}) {
-  const container = new Container()
+  wrap.innerHTML = `
+    <p data-turn class="text-lg font-medium mb-1"></p>
+    <p data-matchpoint class="text-amber-400 text-sm mb-4 hidden">⚡ 赛点 — 再猜中即胜!</p>
+    <div data-guess class="mb-6"></div>
+    <div data-keypad class="mb-8"></div>
+    <button type="button" data-history class="px-5 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm transition-colors active:scale-95">📜 记录</button>
+  `
 
-  // Turn indicator
-  const turnText = new Text({
-    text: engine.isMyTurn ? '你的回合' : '对方回合...',
-    style: {
-      fontSize: 18,
-      fill: engine.isMyTurn ? 0x22c55e : 0x9ca3af,
-      fontFamily: 'system-ui',
-    },
-  })
-  turnText.anchor.set(0.5)
-  turnText.x = 400
-  turnText.y = 20
-  container.addChild(turnText)
+  const turnEl = wrap.querySelector('[data-turn]')
+  const matchpointEl = wrap.querySelector('[data-matchpoint]')
+  const guessWrap = wrap.querySelector('[data-guess]')
+  const keypadWrap = wrap.querySelector('[data-keypad]')
 
-  // Match point indicator
-  if (engine.myMatchPoint) {
-    const mp = new Text({
-      text: '⚡ 赛点 — 再猜中即胜!',
-      style: { fontSize: 14, fill: 0xfbbf24, fontFamily: 'system-ui' },
-    })
-    mp.anchor.set(0.5)
-    mp.x = 400
-    mp.y = 42
-    container.addChild(mp)
+  guessWrap.appendChild(guessInput.element)
+  keypadWrap.appendChild(keypad.element)
+  wrap.querySelector('[data-history]').addEventListener('click', () => historyModal.open())
+
+  function updateTurn(engine) {
+    turnEl.textContent = engine.isMyTurn ? '你的回合' : '对方回合...'
+    turnEl.className = `text-lg font-medium mb-1 ${engine.isMyTurn ? 'text-emerald-400' : 'text-gray-400'}`
+    if (engine.myMatchPoint) {
+      matchpointEl.classList.remove('hidden')
+    } else {
+      matchpointEl.classList.add('hidden')
+    }
   }
 
-  // Guess input
-  guessInput.container.position.set(400 - 150, 68)
-  container.addChild(guessInput.container)
-
-  // Keypad
-  keypad.position.set(400 - 114, 130)
-  container.addChild(keypad)
-
-  // History
-  history.container.position.set(30, 390)
-  container.addChild(history.container)
-
-  container.turnText = turnText
-  return container
-}
-
-export function updatePlayTurn(container, engine, turnText) {
-  turnText.text = engine.isMyTurn ? '你的回合' : '对方回合...'
-  turnText.style.fill = engine.isMyTurn ? 0x22c55e : 0x9ca3af
+  return { element: wrap, updateTurn }
 }

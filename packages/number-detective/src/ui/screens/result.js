@@ -1,42 +1,17 @@
-import { Container, Text, Graphics, Rectangle } from 'pixi.js'
-
 export function createResultScreen({ won, onRematch, onLeave }) {
-  const container = new Container()
+  const wrap = document.createElement('div')
+  wrap.className = 'min-h-screen flex flex-col items-center justify-center px-4'
 
-  const title = new Text({
-    text: won ? '你赢了!' : '你输了',
-    style: {
-      fontSize: 48,
-      fill: won ? 0x22c55e : 0xff4444,
-      fontFamily: 'system-ui',
-    },
-  })
-  title.anchor.set(0.5)
-  title.x = 400
-  title.y = 200
-  container.addChild(title)
+  wrap.innerHTML = `
+    <h2 class="text-5xl font-bold mb-12 ${won ? 'text-emerald-500' : 'text-red-500'}">${won ? '你赢了!' : '你输了'}</h2>
+    <div class="flex flex-col sm:flex-row gap-3 w-full max-w-md">
+      <button type="button" data-rematch class="flex-1 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-lg font-semibold transition-colors active:scale-95">再来一局</button>
+      <button type="button" data-leave class="flex-1 py-3.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-white text-lg font-semibold transition-colors active:scale-95">返回大厅</button>
+    </div>
+  `
 
-  function makeButton(text, x, y, color, cb) {
-    const bg = new Graphics().roundRect(0, 0, 160, 50, 10).fill({ color })
-    const label = new Text({
-      text,
-      style: { fontSize: 20, fill: 0xffffff, fontFamily: 'system-ui' },
-    })
-    label.anchor.set(0.5)
-    label.x = 80
-    label.y = 25
-    const btn = new Container()
-    btn.addChild(bg, label)
-    btn.position.set(x, y)
-    btn.eventMode = 'static'
-    btn.cursor = 'pointer'
-    btn.hitArea = new Rectangle(0, 0, 160, 50)
-    btn.on('pointerdown', cb)
-    return btn
-  }
+  wrap.querySelector('[data-rematch]').addEventListener('click', onRematch)
+  wrap.querySelector('[data-leave]').addEventListener('click', onLeave)
 
-  container.addChild(makeButton('再来一局', 400 - 170, 320, 0x059669, onRematch))
-  container.addChild(makeButton('返回大厅', 400 + 10, 320, 0x374151, onLeave))
-
-  return container
+  return wrap
 }

@@ -2,13 +2,10 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>数字侦探 - 1726 Games</title>
+  <link rel="stylesheet" href="./packages/number-detective/src/style.css">
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #030712; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; overflow-x: hidden; padding-top: 56px; }
-    #game-container { position: relative; width: 100%; max-width: 800px; }
-    #game-container canvas { display: block; width: 100%; height: auto; }
     #back-link {
       position: fixed; top: 16px; left: 16px; z-index: 999;
       color: #9ca3af; text-decoration: none; font-size: 14px;
@@ -22,7 +19,7 @@
 </head>
 <body>
   <a id="back-link" href="/">&larr; 返回大厅</a>
-  <div id="game-container"></div>
+  <div id="app"></div>
   <script type="module" src="./packages/number-detective/src/main.js"></script>
 </body>
 </html>

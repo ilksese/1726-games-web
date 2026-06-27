@@ -46,6 +46,12 @@ importers:
         specifier: workspace:*
         version: link:../shared
 
+  packages/number-detective:
+    dependencies:
+      '@games/shared':
+        specifier: workspace:*
+        version: link:../shared
+
   packages/shared: {}
 
   packages/signaling:

@@ -1,60 +1,16 @@
-import { Container, Text, Graphics, Rectangle } from 'pixi.js'
-
 export function createCreateRoomScreen({ code, onBack }) {
-  const container = new Container()
+  const wrap = document.createElement('div')
+  wrap.className = 'min-h-screen flex flex-col items-center justify-center px-4'
 
-  const title = new Text({
-    text: '房间已创建',
-    style: { fontSize: 28, fill: 0xffffff, fontFamily: 'system-ui' },
-  })
-  title.anchor.set(0.5)
-  title.x = 400
-  title.y = 160
-  container.addChild(title)
+  wrap.innerHTML = `
+    <h2 class="text-3xl font-semibold text-white mb-8">房间已创建</h2>
+    <div class="text-6xl font-mono font-bold text-emerald-500 tracking-[0.3em] mb-3">${code}</div>
+    <p class="text-gray-400 text-base mb-2">将此口令告知对方</p>
+    <p class="text-amber-400 text-xl mt-6 mb-10">等待对手加入...</p>
+    <button type="button" data-back class="px-6 py-3 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-base transition-colors active:scale-95">取消</button>
+  `
 
-  const codeText = new Text({
-    text: code,
-    style: { fontSize: 56, fill: 0x10b981, fontFamily: 'monospace', letterSpacing: 8 },
-  })
-  codeText.anchor.set(0.5)
-  codeText.x = 400
-  codeText.y = 260
-  container.addChild(codeText)
+  wrap.querySelector('[data-back]').addEventListener('click', onBack)
 
-  const hint = new Text({
-    text: '将此口令告知对方',
-    style: { fontSize: 16, fill: 0x9ca3af, fontFamily: 'system-ui' },
-  })
-  hint.anchor.set(0.5)
-  hint.x = 400
-  hint.y = 310
-  container.addChild(hint)
-
-  const waiting = new Text({
-    text: '等待对手加入...',
-    style: { fontSize: 20, fill: 0xfbbf24, fontFamily: 'system-ui' },
-  })
-  waiting.anchor.set(0.5)
-  waiting.x = 400
-  waiting.y = 380
-  container.addChild(waiting)
-
-  const backBg = new Graphics().roundRect(0, 0, 140, 44, 10).fill({ color: 0x374151 })
-  const backText = new Text({
-    text: '取消',
-    style: { fontSize: 18, fill: 0xffffff, fontFamily: 'system-ui' },
-  })
-  backText.anchor.set(0.5)
-  backText.x = 70
-  backText.y = 22
-  const backBtn = new Container()
-  backBtn.addChild(backBg, backText)
-  backBtn.position.set(400 - 70, 460)
-  backBtn.eventMode = 'static'
-  backBtn.cursor = 'pointer'
-  backBtn.hitArea = new Rectangle(0, 0, 140, 44)
-  backBtn.on('pointerdown', onBack)
-  container.addChild(backBtn)
-
-  return container
+  return wrap
 }

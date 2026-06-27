@@ -3,7 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@games/shared": "workspace:*",
-    "pixi.js": "^8"
+    "@games/shared": "workspace:*"
   }
 }

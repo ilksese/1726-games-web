@@ -1,30 +1,23 @@
-import { Application, Text } from 'pixi.js'
 import { getGame, recordPlay } from '@games/shared'
 import { Connection } from './net/connection.js'
 import { GameEngine } from './game/engine.js'
 import { validateSecret } from './game/validate.js'
 import { createKeypad } from './ui/keypad.js'
 import { createGuessInput } from './ui/guess-input.js'
-import { createHistory } from './ui/history.js'
+import { createFeedbackToast } from './ui/feedback-toast.js'
+import { createHistoryModal } from './ui/history-modal.js'
 import { createRoleSelectScreen } from './ui/screens/role-select.js'
 import { createCreateRoomScreen } from './ui/screens/create-room.js'
 import { createJoinRoomScreen } from './ui/screens/join-room.js'
 import { createSetupScreen } from './ui/screens/setup.js'
-import { createPlayScreen, updatePlayTurn } from './ui/screens/play.js'
+import { createPlayScreen } from './ui/screens/play.js'
 import { createResultScreen } from './ui/screens/result.js'
 
-async function init() {
-  const game = getGame('number-detective')
+function init() {
+  getGame('number-detective')
   recordPlay('number-detective')
 
-  const GAME_W = 800, GAME_H = 600
-  const app = new Application()
-  await app.init({ width: GAME_W, height: GAME_H, background: 0x030712, antialias: true })
-
-  const canvas = app.canvas
-  canvas.style.display = 'block'
-  document.getElementById('game-container').appendChild(canvas)
-
+  const root = document.getElementById('app')
   const conn = new Connection()
   let engine = null
   let currentScreen = null
@@ -33,25 +26,38 @@ async function init() {
   let myReady = false
   let guessInput
   let keypad
-  let history
-  let playContainer
-  let turnText
-  let renderSetup
+  let historyModal
+  let toast
+  let playScreen = null
+  let renderSetup = null
+  let keydownHandler = null
+  let overlayEls = []
 
-  function switchScreen(screen) {
+  function switchScreen(el) {
+    if (keydownHandler) {
+      document.removeEventListener('keydown', keydownHandler)
+      keydownHandler = null
+    }
     if (currentScreen) {
-      app.stage.removeChild(currentScreen)
+      root.removeChild(currentScreen)
     }
-    currentScreen = screen
-    if (screen) {
-      app.stage.addChild(screen)
-    }
+    overlayEls.forEach((e) => { if (e.parentNode) e.parentNode.removeChild(e) })
+    overlayEls = []
+    currentScreen = el
+    root.appendChild(el)
   }
 
-  function goToRoleSelect() {
+  function attachKeydown(handler) {
+    if (keydownHandler) document.removeEventListener('keydown', keydownHandler)
+    keydownHandler = handler
+    document.addEventListener('keydown', keydownHandler)
+  }
+
+  function goToRoleSelect(error) {
     switchScreen(createRoleSelectScreen({
       onCreate: () => goToCreateRoom(),
       onJoin: () => goToJoinRoom(),
+      error,
     }))
   }
 
@@ -62,48 +68,18 @@ async function init() {
         code,
         onBack: () => { conn.close(); goToRoleSelect() },
       }))
-      conn.on('ready', () => {
-        goToSetup()
-      })
+      conn.on('ready', () => { goToSetup() })
       conn.on('disconnect', () => {
-        if (currentScreen) {
-          const err = new Text({
-            text: '连接已断开',
-            style: { fontSize: 20, fill: 0xff4444, fontFamily: 'system-ui' },
-          })
-          err.anchor.set(0.5)
-          err.x = 400; err.y = 300
-          currentScreen.addChild(err)
-        }
+        goToRoleSelect('连接已断开')
       })
       await conn.startGame()
     } catch (e) {
       conn.close()
-      switchScreen(createRoleSelectScreen({
-        onCreate: () => goToCreateRoom(),
-        onJoin: () => goToJoinRoom(),
-        error: e.message,
-      }))
+      goToRoleSelect(e.message)
     }
   }
 
-  async function goToJoinRoom() {
-    switchScreen(createJoinRoomScreen({
-      code: '',
-      onJoin: async (code) => {
-        try {
-          await conn.joinRoom(code)
-          conn.on('ready', () => goToSetup())
-          await conn.startGame()
-        } catch (e) {
-          goToJoinRoomError(e.message)
-        }
-      },
-      onBack: () => goToRoleSelect(),
-    }))
-  }
-
-  function goToJoinRoomError(error) {
+  function goToJoinRoom(error) {
     switchScreen(createJoinRoomScreen({
       onJoin: async (code) => {
         try {
@@ -111,7 +87,7 @@ async function init() {
           conn.on('ready', () => goToSetup())
           await conn.startGame()
         } catch (e) {
-          goToJoinRoomError(e.message)
+          goToJoinRoom(e.message)
         }
       },
       onBack: () => goToRoleSelect(),
@@ -125,7 +101,7 @@ async function init() {
     oppReady = false
 
     renderSetup = function () {
-      switchScreen(createSetupScreen({
+      const screen = createSetupScreen({
         secret,
         ready: myReady,
         waiting: oppReady,
@@ -149,7 +125,26 @@ async function init() {
           renderSetup()
           tryStartGame()
         },
-      }))
+      })
+      switchScreen(screen)
+
+      if (!myReady) {
+        attachKeydown((e) => {
+          if (e.key >= '0' && e.key <= '9') {
+            if (secret.length < 4) { secret += e.key; renderSetup() }
+          } else if (e.key === 'Backspace') {
+            secret = secret.slice(0, -1); renderSetup()
+          } else if (e.key === 'Enter') {
+            const err = validateSecret(secret)
+            if (!err) {
+              myReady = true
+              conn.send({ type: 'secret-ready' })
+              renderSetup()
+              tryStartGame()
+            }
+          }
+        })
+      }
     }
 
     renderSetup()
@@ -168,7 +163,8 @@ async function init() {
       const response = engine.processOppGuess(msg.guess)
       conn.send(response)
       if (engine.isOver) {
-        goToResult(engine.won)
+        toast?.show('对方猜对了', 'lose')
+        setTimeout(() => goToResult(engine.won), 800)
       } else {
         updatePlayUI()
       }
@@ -176,8 +172,16 @@ async function init() {
 
     if (msg.type === 'feedback' && engine) {
       engine.processFeedback(msg)
+      const last = engine.myGuesses[engine.myGuesses.length - 1]
+      if (last) {
+        const kind = msg.win ? 'win'
+          : msg.matchPoint ? 'match'
+            : msg.binary === false ? 'lose'
+              : 'info'
+        toast?.show(last.resultText, kind)
+      }
       if (engine.isOver) {
-        goToResult(engine.won)
+        setTimeout(() => goToResult(engine.won), 800)
       } else {
         updatePlayUI()
       }
@@ -197,50 +201,66 @@ async function init() {
 
   function goToPlay() {
     guessInput = createGuessInput()
-    keypad = createKeypad(
-      (d) => {
-        if (engine && engine.isMyTurn && !engine.isOver) {
-          const digits = guessInput.digits || ''
-          if (digits.length < 4) {
-            guessInput.digits = (guessInput.digits || '') + d
-            guessInput.setValue(guessInput.digits)
-          }
-        }
-      },
-      () => {
-        if (engine && engine.isMyTurn) {
-          guessInput.digits = (guessInput.digits || '').slice(0, -1)
-          guessInput.setValue(guessInput.digits || '')
-        }
-      },
-      () => {
-        if (engine && engine.isMyTurn && (guessInput.digits || '').length === 4) {
-          const guess = guessInput.digits
-          guessInput.digits = ''
-          guessInput.setValue('')
-          const result = engine.processMyGuess(guess)
-          if (result.type === 'guess') {
-            conn.send(result)
-            updatePlayUI()
-          }
+    historyModal = createHistoryModal()
+    toast = createFeedbackToast()
+
+    function handleDigit(d) {
+      if (engine && engine.isMyTurn && !engine.isOver) {
+        const digits = guessInput.digits || ''
+        if (digits.length < 4) {
+          guessInput.digits = digits + d
+          guessInput.setValue(guessInput.digits)
         }
       }
-    )
+    }
+    function handleClear() {
+      if (engine && engine.isMyTurn) {
+        guessInput.digits = (guessInput.digits || '').slice(0, -1)
+        guessInput.setValue(guessInput.digits || '')
+      }
+    }
+    function handleConfirm() {
+      if (engine && engine.isMyTurn && (guessInput.digits || '').length === 4) {
+        const guess = guessInput.digits
+        guessInput.digits = ''
+        guessInput.setValue('')
+        const result = engine.processMyGuess(guess)
+        if (result.type === 'guess') {
+          conn.send(result)
+          updatePlayUI()
+        }
+      }
+    }
+
+    keypad = createKeypad({
+      onDigit: handleDigit,
+      onClear: handleClear,
+      onConfirm: handleConfirm,
+    })
+
     guessInput.digits = ''
     guessInput.setValue('')
-    history = createHistory()
 
-    playContainer = createPlayScreen({ engine, guessInput, keypad, history })
-    switchScreen(playContainer)
-    turnText = playContainer.turnText
+    playScreen = createPlayScreen({ guessInput, keypad, historyModal })
+    switchScreen(playScreen.element)
+    root.appendChild(historyModal.element)
+    root.appendChild(toast.element)
+    overlayEls.push(historyModal.element, toast.element)
+
+    attachKeydown((e) => {
+      if (e.key >= '0' && e.key <= '9') { handleDigit(e.key) }
+      else if (e.key === 'Backspace') { handleClear() }
+      else if (e.key === 'Enter') { handleConfirm() }
+    })
+
     updatePlayUI()
   }
 
   function updatePlayUI() {
-    if (!engine || !history || !playContainer) return
-    history.setMyEntries(engine.myGuesses)
-    history.setOppEntries(engine.oppGuesses)
-    updatePlayTurn(playContainer, engine, turnText)
+    if (!engine || !historyModal || !playScreen) return
+    historyModal.setMyEntries(engine.myGuesses)
+    historyModal.setOppEntries(engine.oppGuesses)
+    playScreen.updateTurn(engine)
   }
 
   function goToResult(won) {
@@ -262,8 +282,4 @@ async function init() {
   goToRoleSelect()
 }
 
-init().catch(err => {
-  console.error(err)
-  document.getElementById('game-container').innerHTML =
-    '<p style="color:red;padding:2rem;">游戏加载失败，请刷新重试</p>'
-})
+init()
