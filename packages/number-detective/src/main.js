@@ -33,6 +33,7 @@ async function init() {
   let history
   let playContainer
   let turnText
+  let renderSetup
 
   function switchScreen(screen) {
     if (currentScreen) {
@@ -118,7 +119,7 @@ async function init() {
     myReady = false
     oppReady = false
 
-    function renderSetup() {
+    renderSetup = function () {
       switchScreen(createSetupScreen({
         secret,
         ready: myReady,
@@ -152,13 +153,8 @@ async function init() {
   conn.on('data', (msg) => {
     if (msg.type === 'secret-ready') {
       oppReady = true
-      // Re-render setup if still in setup
-      if (!myReady) {
-        // Re-render the current setup screen
-        const currentSetup = currentScreen
-        if (currentSetup) {
-          // add waiting text
-        }
+      if (!myReady && renderSetup) {
+        renderSetup()
       }
       tryStartGame()
     }
@@ -231,9 +227,7 @@ async function init() {
 
     playContainer = createPlayScreen({ engine, guessInput, keypad, history })
     switchScreen(playContainer)
-
-    // Find turnText to update later
-    turnText = playContainer.children.find(c => c.text === '你的回合' || c.text === '对方回合...')
+    turnText = playContainer.turnText
     updatePlayUI()
   }
 

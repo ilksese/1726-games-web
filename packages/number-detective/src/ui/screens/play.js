@@ -4,7 +4,7 @@ import { createGuessInput } from '../guess-input.js'
 import { createHistory } from '../history.js'
 
 export function createPlayScreen({
-  engine, onDigit, onClear, onConfirm, guessInput, keypad, history,
+  engine, guessInput, keypad, history,
 }) {
   const container = new Container()
 
@@ -46,6 +46,7 @@ export function createPlayScreen({
   history.container.position.set(30, 380)
   container.addChild(history.container)
 
+  container.turnText = turnText
   return container
 }
 

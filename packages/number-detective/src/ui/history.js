@@ -1,4 +1,4 @@
-import { Container, Text, Graphics } from 'pixi.js'
+import { Container, Text } from 'pixi.js'
 
 const COL_W = 300
 
