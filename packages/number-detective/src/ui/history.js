@@ -14,7 +14,7 @@ function createColumn(title, x) {
   container.addChild(header)
 
   const rows = new Container()
-  rows.position.set(0, 24)
+  rows.position.set(0, 22)
   container.addChild(rows)
 
   function setEntries(entries) {
@@ -23,9 +23,9 @@ function createColumn(title, x) {
       const color = entry.red ? 0xff4444 : entry.resultText === '对 ✓' ? 0x22c55e : 0xffffff
       const line = new Text({
         text: `${entry.guess}  →  ${entry.resultText}`,
-        style: { fontSize: 15, fill: color, fontFamily: 'monospace' },
+        style: { fontSize: 14, fill: color, fontFamily: 'monospace' },
       })
-      line.y = i * 22
+      line.y = i * 20
       rows.addChild(line)
     })
   }

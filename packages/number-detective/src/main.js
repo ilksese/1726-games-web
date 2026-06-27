@@ -17,10 +17,13 @@ async function init() {
   const game = getGame('number-detective')
   recordPlay('number-detective')
 
+  const GAME_W = 800, GAME_H = 600
   const app = new Application()
-  await app.init({ width: 800, height: 600, background: 0x030712, antialias: true })
+  await app.init({ width: GAME_W, height: GAME_H, background: 0x030712, antialias: true })
 
-  document.getElementById('game-container').appendChild(app.canvas)
+  const canvas = app.canvas
+  canvas.style.display = 'block'
+  document.getElementById('game-container').appendChild(canvas)
 
   const conn = new Connection()
   let engine = null

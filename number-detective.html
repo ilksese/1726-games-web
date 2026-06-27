@@ -6,14 +6,15 @@
   <title>数字侦探 - 1726 Games</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #030712; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-    #game-container { position: relative; }
+    body { background: #030712; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; overflow-x: hidden; padding-top: 56px; }
+    #game-container { position: relative; width: 100%; max-width: 800px; }
+    #game-container canvas { display: block; width: 100%; height: auto; }
     #back-link {
-      position: fixed; top: 16px; left: 16px;
+      position: fixed; top: 16px; left: 16px; z-index: 999;
       color: #9ca3af; text-decoration: none; font-size: 14px;
       font-family: system-ui, sans-serif;
       padding: 8px 16px; border-radius: 8px;
-      background: rgba(31,41,55,0.8); border: 1px solid #374151;
+      background: rgba(31,41,55,0.95); border: 1px solid #374151;
       transition: background 0.2s;
     }
     #back-link:hover { background: #374151; }

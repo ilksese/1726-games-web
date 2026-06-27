@@ -26,24 +26,24 @@ export function createPlayScreen({
   if (engine.myMatchPoint) {
     const mp = new Text({
       text: '⚡ 赛点 — 再猜中即胜!',
-      style: { fontSize: 16, fill: 0xfbbf24, fontFamily: 'system-ui' },
+      style: { fontSize: 14, fill: 0xfbbf24, fontFamily: 'system-ui' },
     })
     mp.anchor.set(0.5)
     mp.x = 400
-    mp.y = 48
+    mp.y = 42
     container.addChild(mp)
   }
 
   // Guess input
-  guessInput.container.position.set(400 - 150, 80)
+  guessInput.container.position.set(400 - 150, 68)
   container.addChild(guessInput.container)
 
   // Keypad
-  keypad.position.set(400 - 114, 180)
+  keypad.position.set(400 - 114, 130)
   container.addChild(keypad)
 
   // History
-  history.container.position.set(30, 380)
+  history.container.position.set(30, 390)
   container.addChild(history.container)
 
   container.turnText = turnText
