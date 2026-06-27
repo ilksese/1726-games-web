@@ -40,4 +40,7 @@ async function init() {
   })
 }
 
-init().catch(console.error)
+init().catch(err => {
+  console.error(err)
+  document.getElementById('game-container').innerHTML = '<p style="color:red;padding:2rem;">游戏加载失败，请刷新重试</p>'
+})
