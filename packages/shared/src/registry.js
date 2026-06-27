@@ -17,6 +17,15 @@ export const games = [
     description: '第二个游戏，开发中',
     color: '#ec4899',
   },
+  {
+    id: 'number-detective',
+    name: '数字侦探',
+    url: '/number-detective.html',
+    icon: '🕵️',
+    tags: ['益智', '双人'],
+    description: '局域网双人数字破译',
+    color: '#10b981',
+  },
 ]
 
 export function getGame(id) {

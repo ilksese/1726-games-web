@@ -16,6 +16,7 @@ export default defineConfig({
         lobby: resolve(__dirname, 'index.html'),
         'game-a': resolve(__dirname, 'game-a.html'),
         'game-b': resolve(__dirname, 'game-b.html'),
+        'number-detective': resolve(__dirname, 'number-detective.html'),
       },
     },
   },
