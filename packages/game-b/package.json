@@ -1,0 +1,9 @@
+{
+  "name": "@games/game-b",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@games/shared": "workspace:*",
+    "pixi.js": "^8"
+  }
+}
