@@ -5,13 +5,10 @@ pnpm workspace monorepo with Vite 6 multi-entry, Tailwind CSS v4, vanilla JS. No
 ## Commands
 
 ```sh
-pnpm dev          # Vite dev server at localhost:5173
+pnpm dev          # Vite dev server at localhost:5173 (uses --host for LAN access)
 pnpm build        # Build all 4 HTML entries to dist/
 pnpm preview      # Preview dist/
-pnpm signaling    # WebSocket signaling server on port 8787 (required for number-detective multiplayer)
 ```
-
-Number-detective needs **both** `pnpm dev` and `pnpm signaling` running simultaneously. On another LAN device, browse `http://<host IP>:5173/number-detective.html`.
 
 ## Architecture
 
@@ -28,8 +25,7 @@ Number-detective needs **both** `pnpm dev` and `pnpm signaling` running simultan
 | `@games/lobby` | Lobby page: search, tag filter, favorites, recent plays (vanilla DOM) |
 | `@games/game-a` | PixiJS v8 placeholder (indigo bg `#1e1b4b`) |
 | `@games/game-b` | PixiJS v8 placeholder (dark purple bg `#1b1b3a`) |
-| `@games/number-detective` | Native DOM + Tailwind (no PixiJS). LAN two-player number deduction over WebRTC |
-| `@games/signaling` | Minimal `ws` relay server for number-detective room pairing + SDP/ICE forwarding |
+| `@games/number-detective` | Native DOM + Tailwind (no PixiJS). LAN two-player number deduction over WebRTC via QR codes + link sharing (no server required) |
 
 ### PixiJS games (game-a, game-b)
 
@@ -40,9 +36,9 @@ Number-detective needs **both** `pnpm dev` and `pnpm signaling` running simultan
 ### number-detective
 
 - UI layer (`src/ui/`) is pure DOM + Tailwind — no PixiJS, no canvas
-- `src/game/engine.js` + `src/game/validate.js` + `src/net/connection.js` are **pure JS** (no DOM, no UI imports) — safe to unit test in isolation, currently untested
-- `connection.js` hardcodes signaling port `8787` (matches `signaling/server.js` default `PORT=8787`)
-- Room codes are 6-digit numeric (typable on the in-app keypad)
+- `src/game/engine.js` + `src/game/validate.js` + `src/net/signaling.js` are **pure JS** (no DOM, no UI imports) — safe to unit test in isolation, currently untested
+- WebRTC connection uses QR codes + shareable links for SDP exchange (no signaling server). Host generates offer → QR + link; guest scans/opens → generates answer → QR + link back. Single-round-trip with ICE candidates embedded in SDP.
+- Only new dependency: `qrcode` npm package (in `@games/number-detective`); WebRTC is browser-native, no third-party WebRTC library
 - Responsive: mobile/tablet/PC via Tailwind breakpoints; on-screen keypad on all devices, physical keyboard (0-9/Backspace/Enter) as desktop accelerator
 - History records shown via Modal + Tabs, not inline on the play screen
 
