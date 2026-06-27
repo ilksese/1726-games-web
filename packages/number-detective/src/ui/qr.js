@@ -37,7 +37,6 @@ export function startScanner(videoEl, onDetect, onError) {
         try {
           const barcodes = await detector.detect(videoEl)
           if (barcodes.length > 0) {
-            stop()
             return barcodes[0].rawValue
           }
         } catch {

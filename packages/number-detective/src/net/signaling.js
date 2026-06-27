@@ -32,11 +32,16 @@ export async function createOffer() {
   const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS })
   const channel = pc.createDataChannel('game')
 
-  const offer = await pc.createOffer()
-  await pc.setLocalDescription(offer)
-  await waitForIceComplete(pc)
+  try {
+    const offer = await pc.createOffer()
+    await pc.setLocalDescription(offer)
+    await waitForIceComplete(pc)
 
-  return { pc, channel, offerSdp: encodeSdp(pc.localDescription) }
+    return { pc, channel, offerSdp: encodeSdp(pc.localDescription) }
+  } catch (e) {
+    pc.close()
+    throw e
+  }
 }
 
 export async function acceptOffer(encodedOffer) {
@@ -45,15 +50,20 @@ export async function acceptOffer(encodedOffer) {
     pc.ondatachannel = (e) => resolve(e.channel)
   })
 
-  const offer = decodeSdp(encodedOffer)
-  await pc.setRemoteDescription(offer)
+  try {
+    const offer = decodeSdp(encodedOffer)
+    await pc.setRemoteDescription(offer)
 
-  const channel = await channelPromise
-  const answer = await pc.createAnswer()
-  await pc.setLocalDescription(answer)
-  await waitForIceComplete(pc)
+    const channel = await channelPromise
+    const answer = await pc.createAnswer()
+    await pc.setLocalDescription(answer)
+    await waitForIceComplete(pc)
 
-  return { pc, channel, answerSdp: encodeSdp(pc.localDescription) }
+    return { pc, channel, answerSdp: encodeSdp(pc.localDescription) }
+  } catch (e) {
+    pc.close()
+    throw e
+  }
 }
 
 export async function applyAnswer(pc, encodedAnswer) {

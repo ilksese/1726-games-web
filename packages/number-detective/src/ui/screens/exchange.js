@@ -1,5 +1,5 @@
 import { renderQr, startScanner } from '../qr.js'
-import { createOffer, acceptOffer, applyAnswer, encodeSdp } from '../../net/signaling.js'
+import { createOffer, acceptOffer, applyAnswer } from '../../net/signaling.js'
 
 export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }) {
   const wrap = document.createElement('div')
@@ -132,6 +132,9 @@ export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }
           channel.onopen = () => {
             if (!destroyed) onConnected({ pc, channel })
           }
+          if (channel.readyState === 'open') {
+            if (!destroyed) onConnected({ pc, channel })
+          }
         } catch (e) {
           showError(`连接失败: ${e.message}`)
         }
@@ -189,6 +192,9 @@ export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }
           if (destroyed) { pc.close(); return }
           showAnswerUI(answerSdp)
           channel.onopen = () => {
+            if (!destroyed) onConnected({ pc, channel })
+          }
+          if (channel.readyState === 'open') {
             if (!destroyed) onConnected({ pc, channel })
           }
         }).catch((e) => {
