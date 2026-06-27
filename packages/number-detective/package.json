@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@games/shared": "workspace:*"
+    "@games/shared": "workspace:*",
+    "qrcode": "^1.5.4"
   }
 }
