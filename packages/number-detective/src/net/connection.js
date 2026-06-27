@@ -3,7 +3,7 @@ const STUN_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }]
 export class Connection {
   constructor(signalingHost = location.hostname) {
     this.signalingHost = signalingHost
-    this.signalingPort = 5174
+    this.signalingPort = 8787
     this.ws = null
     this.pc = null
     this.channel = null
@@ -27,10 +27,11 @@ export class Connection {
   async createRoom() {
     await this._connectWS()
     this.isHost = true
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('信令服务器响应超时，请确认信令服务器已启动')), 8000)
       this.ws.onmessage = (e) => {
         const msg = JSON.parse(e.data)
-        if (msg.type === 'created') resolve(msg.code)
+        if (msg.type === 'created') { clearTimeout(timer); resolve(msg.code) }
       }
       this.ws.send(JSON.stringify({ type: 'create' }))
     })
@@ -40,10 +41,11 @@ export class Connection {
     await this._connectWS()
     this.isHost = false
     return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('信令服务器响应超时，请确认信令服务器已启动')), 8000)
       this.ws.onmessage = (e) => {
         const msg = JSON.parse(e.data)
-        if (msg.type === 'paired') resolve()
-        if (msg.type === 'error') reject(new Error(msg.message))
+        if (msg.type === 'paired') { clearTimeout(timer); resolve() }
+        if (msg.type === 'error') { clearTimeout(timer); reject(new Error(msg.message)) }
       }
       this.ws.send(JSON.stringify({ type: 'join', code }))
     })

@@ -1,6 +1,6 @@
 import { WebSocketServer } from 'ws'
 
-const PORT = process.env.PORT || 5174
+const PORT = process.env.PORT || 8787
 const rooms = new Map()
 
 function generateCode() {
@@ -10,7 +10,14 @@ function generateCode() {
   return code
 }
 
-const wss = new WebSocketServer({ port: PORT })
+const wss = new WebSocketServer({ port: PORT }, () => {
+  console.log(`Signaling server running on port ${PORT}`)
+})
+
+wss.on('error', (err) => {
+  console.error(`Signaling server failed to start on port ${PORT}: ${err.message}`)
+  process.exit(1)
+})
 
 wss.on('connection', (ws) => {
   let currentRoom = null
@@ -67,4 +74,3 @@ wss.on('connection', (ws) => {
   })
 })
 
-console.log(`Signaling server running on port ${PORT}`)

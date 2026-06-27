@@ -1,6 +1,6 @@
 import { Container, Text, Graphics, Rectangle } from 'pixi.js'
 
-export function createRoleSelectScreen({ onCreate, onJoin }) {
+export function createRoleSelectScreen({ onCreate, onJoin, error }) {
   const container = new Container()
 
   const title = new Text({
@@ -44,6 +44,17 @@ export function createRoleSelectScreen({ onCreate, onJoin }) {
 
   container.addChild(makeButton('创建房间', 400 - btnW - 12, 320, 0x059669, onCreate))
   container.addChild(makeButton('加入房间', 400 + 12, 320, 0x6366f1, onJoin))
+
+  if (error) {
+    const errText = new Text({
+      text: error,
+      style: { fontSize: 16, fill: 0xff4444, fontFamily: 'system-ui', wordWrap: true, wordWrapWidth: 460, align: 'center' },
+    })
+    errText.anchor.set(0.5)
+    errText.x = 400
+    errText.y = 420
+    container.addChild(errText)
+  }
 
   return container
 }

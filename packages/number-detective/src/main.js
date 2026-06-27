@@ -75,9 +75,11 @@ async function init() {
       })
       await conn.startGame()
     } catch (e) {
+      conn.close()
       switchScreen(createRoleSelectScreen({
         onCreate: () => goToCreateRoom(),
         onJoin: () => goToJoinRoom(),
+        error: e.message,
       }))
     }
   }
