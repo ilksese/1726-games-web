@@ -4,7 +4,7 @@ const PORT = process.env.PORT || 8787
 const rooms = new Map()
 
 function generateCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const chars = '0123456789'
   let code = ''
   for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)]
   return code
