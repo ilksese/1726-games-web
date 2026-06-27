@@ -96,6 +96,7 @@ function init() {
         pc = peerConn
         channel = dataChannel
         isHost = mode === 'host'
+        exchangeScreen?.destroy()
         exchangeScreen = null
         goToSetup()
       },
