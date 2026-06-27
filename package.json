@@ -4,8 +4,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "signaling": "node packages/signaling/server.js"
+    "preview": "vite preview"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4",

@@ -1,8 +1,0 @@
-{
-  "name": "@games/signaling",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "ws": "^8"
-  }
-}
