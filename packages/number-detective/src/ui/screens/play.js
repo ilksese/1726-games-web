@@ -39,8 +39,8 @@ export function createPlayScreen({
   container.addChild(guessInput.container)
 
   // Keypad
-  keypad.container.position.set(400 - 114, 180)
-  container.addChild(keypad.container)
+  keypad.position.set(400 - 114, 180)
+  container.addChild(keypad)
 
   // History
   history.container.position.set(30, 380)
