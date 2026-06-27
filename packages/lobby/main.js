@@ -1,4 +1,4 @@
-import { games, getGame, getAllTags, getScore, isFavorite, toggleFavorite, recordPlay, getRecentPlays } from '@games/shared'
+import { games, getAllTags, getScore, isFavorite, toggleFavorite, recordPlay, getRecentPlays } from '@games/shared'
 import { createCard } from './components/card.js'
 import { createSearch } from './components/search.js'
 import { createFilter } from './components/filter.js'

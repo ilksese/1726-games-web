@@ -9,7 +9,7 @@ export function createCard(game, state, onFavorite) {
       <h3 class="text-lg font-semibold">${game.name}</h3>
       <p class="text-sm text-gray-400 mt-1">${game.description}</p>
       <div class="flex items-center gap-2 mt-3">
-        <span class="text-xs bg-${game.color}/10 text-gray-300 px-2 py-0.5 rounded">${game.tags[0]}</span>
+        <span class="text-xs bg-[${game.color}]/10 text-gray-300 px-2 py-0.5 rounded">${game.tags[0]}</span>
         ${state.score > 0 ? `<span class="text-xs text-gray-500">最高分: ${state.score}</span>` : ''}
         ${state.isNew ? `<span class="text-xs text-green-400 font-medium">NEW</span>` : ''}
       </div>
