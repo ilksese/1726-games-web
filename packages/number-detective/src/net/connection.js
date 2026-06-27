@@ -69,10 +69,6 @@ export class Connection {
     if (this.isHost) {
       this.channel = this.pc.createDataChannel('game')
       this._setupChannel()
-      this.pc.createOffer().then(offer => {
-        this.pc.setLocalDescription(offer)
-        this.ws.send(JSON.stringify({ type: 'offer', sdp: offer.sdp }))
-      })
     } else {
       this.pc.ondatachannel = (e) => {
         this.channel = e.channel
@@ -82,7 +78,12 @@ export class Connection {
 
     this.ws.onmessage = (e) => {
       const msg = JSON.parse(e.data)
-      if (msg.type === 'offer') {
+      if (msg.type === 'paired' && this.isHost) {
+        this.pc.createOffer().then(offer => {
+          this.pc.setLocalDescription(offer)
+          this.ws.send(JSON.stringify({ type: 'offer', sdp: offer.sdp }))
+        })
+      } else if (msg.type === 'offer') {
         this.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: msg.sdp }))
         this.pc.createAnswer().then(answer => {
           this.pc.setLocalDescription(answer)
