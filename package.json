@@ -12,6 +12,7 @@
     "vite": "^6"
   },
   "dependencies": {
+    "events": "^3.3.0",
     "pixi.js": "^8"
   }
 }

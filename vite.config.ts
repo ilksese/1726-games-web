@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@games/shared': resolve(__dirname, 'packages/shared/src'),
+      events: resolve(__dirname, 'node_modules/events'),
     },
   },
   build: {

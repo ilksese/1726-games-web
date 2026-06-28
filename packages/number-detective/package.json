@@ -4,6 +4,7 @@
   "type": "module",
   "dependencies": {
     "@games/shared": "workspace:*",
+    "events": "^3.3.0",
     "qrcode": "^1.5.4",
     "simple-peer": "^9.11.1"
   }
