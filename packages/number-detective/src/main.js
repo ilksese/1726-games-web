@@ -16,8 +16,7 @@ function init() {
   recordPlay('number-detective')
 
   const root = document.getElementById('app')
-  let pc = null
-  let channel = null
+  let peer = null
   let isHost = false
   let engine = null
   let currentScreen = null
@@ -35,16 +34,14 @@ function init() {
   let overlayEls = []
 
   function send(data) {
-    if (channel?.readyState === 'open') {
-      channel.send(JSON.stringify(data))
+    if (peer?.connected) {
+      peer.send(JSON.stringify(data))
     }
   }
 
   function cleanConnection() {
-    channel?.close()
-    pc?.close()
-    channel = null
-    pc = null
+    peer?.destroy()
+    peer = null
     exchangeScreen?.destroy()
     exchangeScreen = null
   }
@@ -92,9 +89,8 @@ function init() {
     exchangeScreen = createExchangeScreen({
       mode,
       encodedOffer,
-      onConnected: ({ pc: peerConn, channel: dataChannel }) => {
-        pc = peerConn
-        channel = dataChannel
+      onConnected: ({ peer: p }) => {
+        peer = p
         isHost = mode === 'host'
         exchangeScreen?.destroy()
         exchangeScreen = null
@@ -200,9 +196,6 @@ function init() {
     if (msg.type === 'rematch') {
       goToSetup()
     }
-
-    // Forward disconnect to maintenance check
-    // (connectionstatechange handles this separately)
   }
 
   function tryStartGame() {
@@ -261,22 +254,19 @@ function init() {
     overlayEls.push(historyModal.element, toast.element)
 
     // Bind disconnect detection
-    channel.onclose = () => {
+    const handleDisconnect = () => {
       if (!engine?.isOver) {
         engine = null
         goToRoleSelect('连接已断开')
       }
     }
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-        if (!engine?.isOver) {
-          engine = null
-          goToRoleSelect('连接已断开')
-        }
-      }
-    }
+    peer.on('close', handleDisconnect)
+    peer.on('error', handleDisconnect)
     // Bind data handler
-    channel.onmessage = (e) => handleGameMessage(JSON.parse(e.data))
+    peer.on('data', (data) => {
+      const text = typeof data === 'string' ? data : new TextDecoder().decode(data)
+      handleGameMessage(JSON.parse(text))
+    })
 
     attachKeydown((e) => {
       if (e.key >= '0' && e.key <= '9') { handleDigit(e.key) }

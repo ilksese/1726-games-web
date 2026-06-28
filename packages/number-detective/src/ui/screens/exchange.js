@@ -1,5 +1,5 @@
 import { renderQr, startScanner } from '../qr.js'
-import { createOffer, acceptOffer, applyAnswer } from '../../net/signaling.js'
+import { createHostPeer, createGuestPeer, applyAnswer } from '../../net/signaling.js'
 
 export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }) {
   const wrap = document.createElement('div')
@@ -74,15 +74,13 @@ export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }
     `
 
     // Start WebRTC host flow
-    let pc, channel
-    createOffer().then((result) => {
-      pc = result.pc
-      channel = result.channel
-      const offerSdp = result.offerSdp
+    let peer
+    createHostPeer().then(({ peer: p, signalData }) => {
+      peer = p
 
-      if (destroyed) { pc.close(); return }
+      if (destroyed) { peer.destroy(); return }
 
-      const linkUrl = `${location.origin}${location.pathname}#s=${encodeURIComponent(offerSdp)}`
+      const linkUrl = `${location.origin}${location.pathname}#s=${encodeURIComponent(signalData)}`
 
       // QR code
       const qr = renderQr(linkUrl, 250)
@@ -128,13 +126,10 @@ export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }
           } else {
             answerSdp = raw
           }
-          await applyAnswer(pc, answerSdp)
-          channel.onopen = () => {
-            if (!destroyed) onConnected({ pc, channel })
-          }
-          if (channel.readyState === 'open') {
-            if (!destroyed) onConnected({ pc, channel })
-          }
+          await applyAnswer(peer, answerSdp)
+          peer.on('connect', () => {
+            if (!destroyed) onConnected({ peer })
+          })
         } catch (e) {
           showError(`连接失败: ${e.message}`)
         }
@@ -188,15 +183,12 @@ export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }
         const answerSection = wrap.querySelector('[data-guest-answer]')
         answerSection.classList.remove('hidden')
 
-        acceptOffer(offerSdp).then(({ pc, channel, answerSdp }) => {
-          if (destroyed) { pc.close(); return }
-          showAnswerUI(answerSdp)
-          channel.onopen = () => {
-            if (!destroyed) onConnected({ pc, channel })
-          }
-          if (channel.readyState === 'open') {
-            if (!destroyed) onConnected({ pc, channel })
-          }
+        createGuestPeer(offerSdp).then(({ peer: p, signalData }) => {
+          if (destroyed) { p.destroy(); return }
+          showAnswerUI(signalData)
+          p.on('connect', () => {
+            if (!destroyed) onConnected({ peer: p })
+          })
         }).catch((e) => {
           if (!destroyed) showError(e.message)
         })
