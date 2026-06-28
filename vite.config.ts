@@ -1,14 +1,20 @@
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
+import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
 export default defineConfig({
   root: __dirname,
-  plugins: [tailwindcss()],
+  plugins: [
+    tailwindcss(),
+    nodePolyfills({
+      include: ['process', 'buffer', 'events'],
+      globals: { process: true, Buffer: true, global: true },
+    }),
+  ],
   resolve: {
     alias: {
       '@games/shared': resolve(__dirname, 'packages/shared/src'),
-      events: resolve(__dirname, 'node_modules/events'),
     },
   },
   build: {
