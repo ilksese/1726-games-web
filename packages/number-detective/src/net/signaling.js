@@ -1,7 +1,7 @@
 import Peer from 'simple-peer'
 
 const STUN_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }]
-const ICE_TIMEOUT_MS = 5000
+const ICE_TIMEOUT_MS = 30000
 
 function firstSignal(peer) {
   return new Promise((resolve, reject) => {

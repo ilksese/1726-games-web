@@ -3,7 +3,7 @@ import { createHostPeer, createGuestPeer, applyAnswer } from '../../net/signalin
 
 export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }) {
   const wrap = document.createElement('div')
-  wrap.className = 'min-h-screen flex flex-col items-center px-4 py-8'
+  wrap.className = 'min-h-screen flex flex-col items-center px-4 pt-16 pb-8'
 
   const videoEl = document.createElement('video')
   videoEl.className = 'hidden w-full max-w-sm rounded-xl mt-4'
@@ -22,7 +22,7 @@ export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }
     if (el) el.textContent = msg
   }
 
-  function showAnswerUI(answerSdp) {
+  async function showAnswerUI(answerSdp) {
     const qrWrap = wrap.querySelector('[data-qr]')
     const linkWrap = wrap.querySelector('[data-link-wrap]')
     const linkInput = wrap.querySelector('[data-link-input]')
@@ -31,7 +31,7 @@ export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }
     const answerUrl = `${location.origin}${location.pathname}#r=${encodeURIComponent(answerSdp)}`
 
     // QR code
-    const qr = renderQr(answerUrl, 250)
+    const qr = await renderQr(answerUrl, 250)
     qrWrap.innerHTML = ''
     qrWrap.appendChild(qr)
     qrWrap.className = 'mb-4'
@@ -75,7 +75,7 @@ export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }
 
     // Start WebRTC host flow
     let peer
-    createHostPeer().then(({ peer: p, signalData }) => {
+    createHostPeer().then(async ({ peer: p, signalData }) => {
       peer = p
 
       if (destroyed) { peer.destroy(); return }
@@ -83,7 +83,7 @@ export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }
       const linkUrl = `${location.origin}${location.pathname}#s=${encodeURIComponent(signalData)}`
 
       // QR code
-      const qr = renderQr(linkUrl, 250)
+      const qr = await renderQr(linkUrl, 250)
       wrap.querySelector('[data-qr]').appendChild(qr)
 
       // Link
@@ -136,7 +136,7 @@ export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }
       }
 
     }).catch((e) => {
-      if (!destroyed) showError(e.message)
+      if (!destroyed) showError('连接创建失败')
     })
   }
 
@@ -183,14 +183,14 @@ export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }
         const answerSection = wrap.querySelector('[data-guest-answer]')
         answerSection.classList.remove('hidden')
 
-        createGuestPeer(offerSdp).then(({ peer: p, signalData }) => {
+        createGuestPeer(offerSdp).then(async ({ peer: p, signalData }) => {
           if (destroyed) { p.destroy(); return }
           showAnswerUI(signalData)
           p.on('connect', () => {
             if (!destroyed) onConnected({ peer: p })
           })
-        }).catch((e) => {
-          if (!destroyed) showError(e.message)
+        }).catch(() => {
+          if (!destroyed) showError('无效的主机链接')
         })
       } catch (e) {
         showError('无效的主机链接')

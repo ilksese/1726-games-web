@@ -46,6 +46,13 @@ function init() {
     exchangeScreen = null
   }
 
+  function handleDisconnect() {
+    if (!engine?.isOver) {
+      engine = null
+      goToRoleSelect('连接已断开')
+    }
+  }
+
   function switchScreen(el) {
     if (keydownHandler) {
       document.removeEventListener('keydown', keydownHandler)
@@ -92,6 +99,12 @@ function init() {
       onConnected: ({ peer: p }) => {
         peer = p
         isHost = mode === 'host'
+        peer.on('data', (data) => {
+          const text = typeof data === 'string' ? data : new TextDecoder().decode(data)
+          handleGameMessage(JSON.parse(text))
+        })
+        peer.on('close', () => handleDisconnect())
+        peer.on('error', () => handleDisconnect())
         exchangeScreen?.destroy()
         exchangeScreen = null
         goToSetup()
@@ -252,21 +265,6 @@ function init() {
     root.appendChild(historyModal.element)
     root.appendChild(toast.element)
     overlayEls.push(historyModal.element, toast.element)
-
-    // Bind disconnect detection
-    const handleDisconnect = () => {
-      if (!engine?.isOver) {
-        engine = null
-        goToRoleSelect('连接已断开')
-      }
-    }
-    peer.on('close', handleDisconnect)
-    peer.on('error', handleDisconnect)
-    // Bind data handler
-    peer.on('data', (data) => {
-      const text = typeof data === 'string' ? data : new TextDecoder().decode(data)
-      handleGameMessage(JSON.parse(text))
-    })
 
     attachKeydown((e) => {
       if (e.key >= '0' && e.key <= '9') { handleDigit(e.key) }

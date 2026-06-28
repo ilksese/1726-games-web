@@ -1,11 +1,17 @@
 import QRCode from 'qrcode'
 
-export function renderQr(data, width) {
+export async function renderQr(data, width) {
   const wrapper = document.createElement('div')
   wrapper.className = 'bg-white p-3 rounded-xl'
 
   const canvas = document.createElement('canvas')
-  QRCode.toCanvas(canvas, data, { width: width ?? 250, margin: 1, errorCorrectionLevel: 'M' })
+  try {
+    await QRCode.toCanvas(canvas, data, { width: width ?? 250, margin: 1, errorCorrectionLevel: 'M' })
+  } catch (e) {
+    wrapper.textContent = '二维码生成失败'
+    wrapper.className = 'bg-red-900/50 p-3 rounded-xl text-red-300 text-sm'
+    return wrapper
+  }
   canvas.className = 'block'
 
   wrapper.appendChild(canvas)
