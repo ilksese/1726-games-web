@@ -1,18 +1,28 @@
+import Peer from 'simple-peer'
+
 const STUN_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }]
 const ICE_TIMEOUT_MS = 5000
 
-function waitForIceComplete(pc) {
-  if (pc.iceGatheringState === 'complete') return Promise.resolve()
-  return Promise.race([
-    new Promise((resolve) => {
-      pc.onicegatheringstatechange = () => {
-        if (pc.iceGatheringState === 'complete') resolve()
-      }
-    }),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('ICE收集超时，请重试')), ICE_TIMEOUT_MS)
-    ),
-  ])
+function firstSignal(peer) {
+  return new Promise((resolve, reject) => {
+    const onSignal = (data) => {
+      peer.off('error', onError)
+      clearTimeout(timer)
+      resolve(data)
+    }
+    const onError = (err) => {
+      peer.off('signal', onSignal)
+      clearTimeout(timer)
+      reject(err)
+    }
+    const timer = setTimeout(() => {
+      peer.off('signal', onSignal)
+      peer.off('error', onError)
+      reject(new Error('ICE收集超时，请重试'))
+    }, ICE_TIMEOUT_MS)
+    peer.once('signal', onSignal)
+    peer.once('error', onError)
+  })
 }
 
 export function encodeSdp(sessionDescription) {
@@ -28,45 +38,36 @@ export function decodeSdp(encoded) {
   return JSON.parse(atob(s))
 }
 
-export async function createOffer() {
-  const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS })
-  const channel = pc.createDataChannel('game')
-
-  try {
-    const offer = await pc.createOffer()
-    await pc.setLocalDescription(offer)
-    await waitForIceComplete(pc)
-
-    return { pc, channel, offerSdp: encodeSdp(pc.localDescription) }
-  } catch (e) {
-    pc.close()
-    throw e
-  }
-}
-
-export async function acceptOffer(encodedOffer) {
-  const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS })
-  const channelPromise = new Promise((resolve) => {
-    pc.ondatachannel = (e) => resolve(e.channel)
+export async function createHostPeer() {
+  const peer = new Peer({
+    initiator: true,
+    trickle: false,
+    config: { iceServers: STUN_SERVERS },
   })
-
   try {
-    const offer = decodeSdp(encodedOffer)
-    await pc.setRemoteDescription(offer)
-
-    const channel = await channelPromise
-    const answer = await pc.createAnswer()
-    await pc.setLocalDescription(answer)
-    await waitForIceComplete(pc)
-
-    return { pc, channel, answerSdp: encodeSdp(pc.localDescription) }
+    const signalData = await firstSignal(peer)
+    return { peer, signalData: encodeSdp(signalData) }
   } catch (e) {
-    pc.close()
+    peer.destroy()
     throw e
   }
 }
 
-export async function applyAnswer(pc, encodedAnswer) {
-  const answer = decodeSdp(encodedAnswer)
-  await pc.setRemoteDescription(answer)
+export async function createGuestPeer(encodedOffer) {
+  const peer = new Peer({
+    trickle: false,
+    config: { iceServers: STUN_SERVERS },
+  })
+  try {
+    peer.signal(decodeSdp(encodedOffer))
+    const signalData = await firstSignal(peer)
+    return { peer, signalData: encodeSdp(signalData) }
+  } catch (e) {
+    peer.destroy()
+    throw e
+  }
+}
+
+export function applyAnswer(peer, encodedAnswer) {
+  peer.signal(decodeSdp(encodedAnswer))
 }
