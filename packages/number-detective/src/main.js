@@ -7,6 +7,7 @@ import { createFeedbackToast } from './ui/feedback-toast.js'
 import { createHistoryInline } from './ui/history-inline.js'
 import { createRoleSelectScreen } from './ui/screens/role-select.js'
 import { createExchangeScreen } from './ui/screens/exchange.js'
+import { createRoomExchangeScreen } from './ui/screens/room-exchange.js'
 import { createSetupScreen } from './ui/screens/setup.js'
 import { createPlayScreen } from './ui/screens/play.js'
 import { createResultScreen } from './ui/screens/result.js'
@@ -78,12 +79,38 @@ function init() {
     switchScreen(createRoleSelectScreen({
       onCreate: () => goToExchange('host'),
       onJoin: () => goToExchange('guest'),
+      onCreateBeta: () => goToExchange('host-beta'),
+      onJoinBeta: () => goToExchange('guest-beta'),
       error,
     }))
   }
 
   function goToExchange(mode) {
     cleanConnection()
+
+    function handleConnected({ peer: p }) {
+      peer = p
+      isHost = mode === 'host' || mode === 'host-beta'
+      peer.on('data', (data) => {
+        const text = typeof data === 'string' ? data : new TextDecoder().decode(data)
+        handleGameMessage(JSON.parse(text))
+      })
+      peer.on('close', () => handleDisconnect())
+      peer.on('error', () => handleDisconnect())
+      exchangeScreen?.destroy()
+      exchangeScreen = null
+      goToSetup()
+    }
+
+    if (mode === 'host-beta' || mode === 'guest-beta') {
+      exchangeScreen = createRoomExchangeScreen({
+        mode,
+        onConnected: handleConnected,
+        onBack: () => goToRoleSelect(),
+      })
+      switchScreen(exchangeScreen.element)
+      return
+    }
 
     let encodedOffer = null
     // Check if entered via invite link (#s=<offer> or #r=<answer>)
@@ -96,19 +123,7 @@ function init() {
     exchangeScreen = createExchangeScreen({
       mode,
       encodedOffer,
-      onConnected: ({ peer: p }) => {
-        peer = p
-        isHost = mode === 'host'
-        peer.on('data', (data) => {
-          const text = typeof data === 'string' ? data : new TextDecoder().decode(data)
-          handleGameMessage(JSON.parse(text))
-        })
-        peer.on('close', () => handleDisconnect())
-        peer.on('error', () => handleDisconnect())
-        exchangeScreen?.destroy()
-        exchangeScreen = null
-        goToSetup()
-      },
+      onConnected: handleConnected,
       onBack: () => goToRoleSelect(),
     })
     switchScreen(exchangeScreen.element)
