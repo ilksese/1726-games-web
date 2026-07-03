@@ -4,7 +4,7 @@ import { validateSecret } from './game/validate.js'
 import { createKeypad } from './ui/keypad.js'
 import { createGuessInput } from './ui/guess-input.js'
 import { createFeedbackToast } from './ui/feedback-toast.js'
-import { createHistoryModal } from './ui/history-modal.js'
+import { createHistoryInline } from './ui/history-inline.js'
 import { createRoleSelectScreen } from './ui/screens/role-select.js'
 import { createExchangeScreen } from './ui/screens/exchange.js'
 import { createSetupScreen } from './ui/screens/setup.js'
@@ -26,7 +26,7 @@ function init() {
   let myReady = false
   let guessInput
   let keypad
-  let historyModal
+  let history
   let toast
   let playScreen = null
   let renderSetup = null
@@ -220,7 +220,7 @@ function init() {
 
   function goToPlay() {
     guessInput = createGuessInput()
-    historyModal = createHistoryModal()
+    history = createHistoryInline()
     toast = createFeedbackToast()
 
     function handleDigit(d) {
@@ -260,11 +260,10 @@ function init() {
     guessInput.digits = ''
     guessInput.setValue('')
 
-    playScreen = createPlayScreen({ guessInput, keypad, historyModal })
+    playScreen = createPlayScreen({ guessInput, keypad, history })
     switchScreen(playScreen.element)
-    root.appendChild(historyModal.element)
     root.appendChild(toast.element)
-    overlayEls.push(historyModal.element, toast.element)
+    overlayEls.push(toast.element)
 
     attachKeydown((e) => {
       if (e.key >= '0' && e.key <= '9') { handleDigit(e.key) }
@@ -276,9 +275,9 @@ function init() {
   }
 
   function updatePlayUI() {
-    if (!engine || !historyModal || !playScreen) return
-    historyModal.setMyEntries(engine.myGuesses)
-    historyModal.setOppEntries(engine.oppGuesses)
+    if (!engine || !history || !playScreen) return
+    history.setMyEntries(engine.myGuesses)
+    history.setOppEntries(engine.oppGuesses)
     playScreen.updateTurn(engine)
   }
 
