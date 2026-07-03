@@ -4,7 +4,9 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "worker:dev": "pnpm dlx wrangler dev --config workers/matchmaking/wrangler.toml",
+    "worker:deploy": "pnpm dlx wrangler deploy --config workers/matchmaking/wrangler.toml"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4",
