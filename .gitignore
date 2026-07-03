@@ -1,3 +1,19 @@
 node_modules/
 dist/
-.DS_Store
+**/.DS_Store
+
+# Local secrets and environment overrides
+.env*
+
+# Local tool state and generated caches
+.codegraph/*
+!.codegraph/.gitignore
+.wrangler/
+.playwright*
+tsconfig.tsbuildinfo
+
+# Agent markdown and diff artifacts are local-only in this repo
+.superpowers/**/*.md
+.superpowers/**/*.diff
+docs/superpowers/**/*.md
+docs/superpowers/**/*.diff
