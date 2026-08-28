@@ -1,6 +1,6 @@
 export function createKeypad({ onDigit, onClear, onConfirm }) {
   const wrap = document.createElement('div')
-  wrap.className = 'grid grid-cols-3 gap-1.5 w-full max-w-[280px] mx-auto'
+  wrap.className = 'nd-keypad'
 
   const keys = [
     ['1', '2', '3'],
@@ -13,13 +13,8 @@ export function createKeypad({ onDigit, onClear, onConfirm }) {
     const btn = document.createElement('button')
     btn.type = 'button'
     btn.textContent = label
-    const base = 'min-h-[56px] rounded-lg text-xl font-semibold text-white transition-colors active:scale-95 select-none'
-    const color = variant === 'confirm'
-      ? 'bg-emerald-600 hover:bg-emerald-500'
-      : variant === 'clear'
-        ? 'bg-red-600 hover:bg-red-500'
-        : 'bg-gray-800 hover:bg-gray-700'
-    btn.className = `${base} ${color}`
+    btn.setAttribute('aria-label', variant === 'clear' ? '删除' : variant === 'confirm' ? '确认' : `输入 ${label}`)
+    btn.className = `nd-keypad__button${variant === 'confirm' ? ' nd-keypad__button--confirm' : variant === 'clear' ? ' nd-keypad__button--clear' : ''}`
     btn.addEventListener('click', cb)
     return btn
   }

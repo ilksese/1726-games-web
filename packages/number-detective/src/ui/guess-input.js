@@ -1,11 +1,11 @@
 export function createGuessInput() {
   const wrap = document.createElement('div')
-  wrap.className = 'flex gap-2 justify-center'
+  wrap.className = 'nd-entry-grid'
 
   const cells = []
   for (let i = 0; i < 4; i++) {
     const cell = document.createElement('div')
-    cell.className = 'w-16 h-20 rounded-lg bg-gray-800 flex items-center justify-center text-3xl font-mono text-gray-500'
+    cell.className = 'nd-entry-cell'
     cell.textContent = '_'
     wrap.appendChild(cell)
     cells.push(cell)
@@ -15,10 +15,10 @@ export function createGuessInput() {
     for (let i = 0; i < 4; i++) {
       if (i < digits.length) {
         cells[i].textContent = digits[i]
-        cells[i].className = 'w-16 h-20 rounded-lg bg-gray-800 flex items-center justify-center text-3xl font-mono text-white'
+        cells[i].className = 'nd-entry-cell nd-entry-cell--filled'
       } else {
         cells[i].textContent = '_'
-        cells[i].className = 'w-16 h-20 rounded-lg bg-gray-800 flex items-center justify-center text-3xl font-mono text-gray-500'
+        cells[i].className = 'nd-entry-cell'
       }
     }
   }

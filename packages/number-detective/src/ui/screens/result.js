@@ -1,12 +1,17 @@
 export function createResultScreen({ won, onRematch, onLeave }) {
   const wrap = document.createElement('div')
-  wrap.className = 'min-h-screen flex flex-col items-center justify-center px-4'
+  wrap.className = 'nd-shell nd-shell--centered'
 
   wrap.innerHTML = `
-    <h2 class="text-5xl font-bold mb-12 ${won ? 'text-emerald-500' : 'text-red-500'}">${won ? '你赢了!' : '你输了'}</h2>
-    <div class="flex flex-col sm:flex-row gap-3 w-full max-w-md">
-      <button type="button" data-rematch class="flex-1 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-lg font-semibold transition-colors active:scale-95">再来一局</button>
-      <button type="button" data-leave class="flex-1 py-3.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-white text-lg font-semibold transition-colors active:scale-95">返回大厅</button>
+    <div class="nd-card nd-panel nd-stack">
+      <div>
+        <h2 class="nd-screen-title ${won ? 'text-[#59d98a]' : 'text-[#ff9aaa]'}">${won ? '你赢了' : '你输了'}</h2>
+        <p class="nd-screen-subtitle">${won ? '本局对局已结束' : '这局已经结束，准备下一局'}</p>
+      </div>
+      <div class="flex gap-3">
+        <button type="button" data-rematch class="nd-btn nd-btn--success flex-1">再来一局</button>
+        <button type="button" data-leave class="nd-btn nd-btn--secondary flex-1">返回大厅</button>
+      </div>
     </div>
   `
 

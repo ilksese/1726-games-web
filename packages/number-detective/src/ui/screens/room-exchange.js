@@ -3,7 +3,7 @@ import { createRoom, pollAnswer, closeRoom, getOffer, submitAnswer, normalizeRoo
 
 export function createRoomExchangeScreen({ mode, onConnected, onBack }) {
   const wrap = document.createElement('div')
-  wrap.className = 'min-h-screen flex flex-col items-center px-4 pt-16 pb-8'
+  wrap.className = 'nd-shell nd-shell--stack'
 
   let destroyed = false
   let roomCode = null
@@ -21,7 +21,7 @@ export function createRoomExchangeScreen({ mode, onConnected, onBack }) {
     if (el) el.textContent = msg
   }
 
-  if (mode === 'host-beta') {
+  if (mode === 'host-cloudflare') {
     renderHost()
   } else {
     renderGuest()
@@ -36,15 +36,17 @@ export function createRoomExchangeScreen({ mode, onConnected, onBack }) {
 
   function renderHost() {
     wrap.innerHTML = `
-      <h2 class="text-3xl font-semibold text-white mb-2">创建房间（beta）</h2>
-      <p class="text-gray-400 text-sm mb-6 text-center">把房间码告诉对手，对手输入后会自动连接</p>
-      <div class="w-full max-w-md rounded-2xl bg-gray-900/80 border border-gray-700 p-6 text-center">
-        <p class="text-gray-400 text-sm mb-3">房间码</p>
-        <div data-room-code class="text-5xl tracking-[0.35em] font-bold text-emerald-400 min-h-[4rem] flex items-center justify-center">------</div>
-        <p data-await class="mt-5 text-amber-400 text-base whitespace-pre-line">创建中...</p>
+      <div>
+        <h2 class="nd-screen-title">创建房间（Cloudflare）</h2>
+        <p class="nd-screen-subtitle">把房间码告诉对手，对手输入后会自动连接</p>
       </div>
-      <p data-error class="mt-4 text-red-400 text-sm text-center"></p>
-      <button data-back type="button" class="mt-8 text-gray-400 hover:text-white text-sm">&larr; 返回</button>
+      <section class="nd-card nd-panel nd-stack text-center">
+        <p class="text-sm text-slate-500">房间码</p>
+        <div data-room-code class="min-h-[4rem] flex items-center justify-center text-4xl font-bold tracking-[0.35em] text-[#59d98a]">------</div>
+        <p data-await class="nd-surface-note whitespace-pre-line">创建中...</p>
+      </section>
+      <p data-error class="text-center text-sm text-red-300"></p>
+      <button data-back type="button" class="nd-btn nd-btn--ghost self-center">&larr; 返回</button>
     `
 
     createHostPeer().then(async ({ peer, signalData }) => {
@@ -73,15 +75,17 @@ export function createRoomExchangeScreen({ mode, onConnected, onBack }) {
 
   function renderGuest() {
     wrap.innerHTML = `
-      <h2 class="text-3xl font-semibold text-white mb-6">加入房间（beta）</h2>
-      <div data-guest-init class="w-full max-w-md rounded-2xl bg-gray-900/80 border border-gray-700 p-6">
-        <p class="text-gray-400 text-sm mb-3">输入房主显示的 6 位房间码：</p>
-        <input data-room-input inputmode="numeric" maxlength="6" placeholder="例如 482913" class="w-full px-4 py-4 rounded-xl bg-gray-800 text-white text-2xl tracking-[0.25em] text-center border border-gray-700 mb-4" />
-        <button data-join-room type="button" class="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-lg font-semibold transition-colors active:scale-95">加入房间</button>
+      <div>
+        <h2 class="nd-screen-title">加入房间（Cloudflare）</h2>
+        <p class="nd-screen-subtitle">输入房主显示的 6 位房间码</p>
       </div>
-      <div data-await class="mt-6 text-amber-400 text-lg text-center hidden">正在连接房主...</div>
-      <p data-error class="mt-4 text-red-400 text-sm text-center"></p>
-      <button data-back type="button" class="mt-8 text-gray-400 hover:text-white text-sm">&larr; 返回</button>
+      <section data-guest-init class="nd-card nd-panel nd-stack">
+        <input data-room-input inputmode="numeric" maxlength="6" placeholder="例如 482913" class="nd-input text-center text-2xl tracking-[0.25em]" />
+        <button data-join-room type="button" class="nd-btn nd-btn--primary w-full">加入房间</button>
+      </section>
+      <div data-await class="nd-surface-note text-center hidden">正在连接房主...</div>
+      <p data-error class="text-center text-sm text-red-300"></p>
+      <button data-back type="button" class="nd-btn nd-btn--ghost self-center">&larr; 返回</button>
     `
 
     const input = wrap.querySelector('[data-room-input]')
