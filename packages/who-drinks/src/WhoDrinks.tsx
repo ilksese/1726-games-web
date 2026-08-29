@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useLayoutEffect, useEffect, useMemo, useRef, useState } from 'react'
 import { atom, useAtom, useAtomValue } from 'jotai'
 import { getGame, recordPlay } from '@games/shared'
 import './style.css'
@@ -17,53 +17,6 @@ const COPY_POOL = [
   '感情深，一口闷，敬伯乐！',
   '酒樽不空，情谊不散！',
 ]
-
-const SVG_GLASS = `
-<svg viewBox="0 0 64 64" class="wd-glass-svg" aria-hidden="true">
-  <defs>
-    <linearGradient id="wg-wine" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#c6283a"/>
-      <stop offset="1" stop-color="#6d0f1e"/>
-    </linearGradient>
-    <linearGradient id="wg-gold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f3d58a"/>
-      <stop offset="1" stop-color="#b8863d"/>
-    </linearGradient>
-  </defs>
-  <g transform="rotate(-8 32 32)">
-    <path d="M14 8h34l-4 40a3 3 0 0 1-3 2.7H21a3 3 0 0 1-3-2.7L14 8z" fill="none" stroke="url(#wg-gold)" stroke-width="2.4"/>
-    <path d="M17.5 14c0 8 6 12 13 12s13-4 13-12z" fill="url(#wg-wine)"/>
-    <path d="M12 8h38" stroke="url(#wg-gold)" stroke-width="3" stroke-linecap="round"/>
-    <ellipse cx="32" cy="14" rx="13" ry="3.4" fill="#f2d5a0" opacity="0.85"/>
-    <path d="M31 2.5a1.5 1.5 0 0 1 2 0l1.4 3.4h-4.8z" fill="url(#wg-gold)"/>
-  </g>
-</svg>`
-
-const SVG_SAFE = `
-<svg viewBox="0 0 64 64" class="wd-safe-svg" aria-hidden="true">
-  <defs>
-    <linearGradient id="wg-ink" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#4a3726"/>
-      <stop offset="1" stop-color="#2b1f14"/>
-    </linearGradient>
-  </defs>
-  <g transform="rotate(8 32 32)">
-    <path d="M32 8c5 4 13 5 13 12 0 12-13 22-13 22S19 32 19 20c0-7 8-8 13-12z" fill="url(#wg-ink)" opacity="0.28"/>
-    <path d="M32 10c4.4 3.6 11.5 4.6 11.5 10.5 0 10.2-11.5 19-11.5 19S20.5 30.7 20.5 20.5C20.5 14.6 27.6 13.6 32 10z" fill="none" stroke="#c9a15f" stroke-width="2.2" stroke-linejoin="round"/>
-    <path d="M32 26l-6-6.5 1.8-1.6L32 22.4l6.2-5.5 1.8 1.6z" fill="#c9a15f"/>
-  </g>
-</svg>`
-
-const SVG_BACK = `
-<svg viewBox="0 0 64 64" class="wd-back-svg" aria-hidden="true">
-  <rect x="2" y="2" width="60" height="60" rx="7" fill="none" stroke="#d8b877" stroke-width="2"/>
-  <rect x="7" y="7" width="50" height="50" rx="4" fill="none" stroke="#d8b877" stroke-width="1" opacity="0.7"/>
-  <circle cx="32" cy="32" r="15" fill="none" stroke="#d8b877" stroke-width="1.4" opacity="0.85"/>
-  <circle cx="32" cy="32" r="8" fill="none" stroke="#d8b877" stroke-width="1.2" opacity="0.7"/>
-  <path d="M32 24v16M24 32h16" stroke="#d8b877" stroke-width="1.6" stroke-linecap="round"/>
-</svg>`
-
-const SVG_BACK_BAR = SVG_BACK.replace('class="wd-back-svg"', 'class="wd-back-svg wd-bar-icon"')
 
 const cfgAtom = atom({ total: 12, drinks: 3 })
 
@@ -135,7 +88,6 @@ function Setup({ onStart }: { onStart: (total: number, drinks: number) => void }
   return (
     <div className="wd-shell wd-shell--center">
       <div className="wd-brand">
-        <div className="wd-brand-mark" dangerouslySetInnerHTML={{ __html: SVG_GLASS }} />
         <h1 className="wd-title">谁喝酒</h1>
         <p className="wd-subtitle">翻到酒杯的人，喝一杯</p>
       </div>
@@ -186,10 +138,9 @@ function Setup({ onStart }: { onStart: (total: number, drinks: number) => void }
           </div>
         </label>
         <p className={`wd-hint${hintError ? ' wd-hint--error' : ''}`}>{hintText}</p>
-        <button type="button" className="wd-btn wd-btn--primary" onClick={start}>
-          开一局
-        </button>
+        <button type="button" className="wd-btn wd-btn--primary" onClick={start} aria-label="开一局" />
       </div>
+      <p className="wd-footer">木质酒馆聚会游戏 · 合理饮酒 · 量力而行</p>
     </div>
   )
 }
@@ -264,26 +215,22 @@ function DrinkModal({
       </div>
       <div className="wd-prize-glow" />
       <div className="wd-prize-card">
-        <div className="wd-prize-glass" dangerouslySetInnerHTML={{ __html: SVG_GLASS }} />
+        <div className="wd-prize-glass" />
         <h2 className="wd-prize-title">喝一杯！</h2>
         <p className="wd-prize-copy">{copy}</p>
       </div>
       <div className="wd-prize-actions">
         {remaining > 0 ? (
-          <button className="wd-btn wd-btn--ghost" onClick={onContinue}>
-            继续
-          </button>
+          <button className="wd-btn wd-btn--continue" onClick={onContinue} aria-label="继续" />
         ) : null}
-        <button
-          className={`wd-btn ${remaining > 0 ? 'wd-btn--secondary' : 'wd-btn--primary'}`}
-          onClick={onNextRound}
-        >
-          下一轮
-        </button>
+        <button className="wd-btn wd-btn--next" onClick={onNextRound} aria-label="下一轮" />
       </div>
     </div>
   )
 }
+
+const MIN_CARD_W = 30
+const CARD_AR = 1.5
 
 function Game({ onReset }: { onReset: () => void }) {
   const cfg = useAtomValue(cfgAtom)
@@ -293,6 +240,45 @@ function Game({ onReset }: { onReset: () => void }) {
   const [locked, setLocked] = useState(false)
   const [modal, setModal] = useState<{ remaining: number } | null>(null)
   const [leaving, setLeaving] = useState(false)
+  const gridRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    const g = gridRef.current
+    if (!g) return
+    const compute = () => {
+      g.style.width = ''
+      const W = g.clientWidth
+      const H = g.clientHeight
+      const n = deck.length
+      if (!W || !H || !n) return
+      // ponytail: auto-fill 只按宽度数列，不知道牌数与高度约束，这里穷举 c；
+      // 先强制 30px 下限，牌多放不下时允许跌破下限保一屏
+      let best: { c: number; width: number; gap: number; area: number } | null = null
+      const maxCols = Math.min(n, 12)
+      for (const minW of [MIN_CARD_W, 0]) {
+        for (let c = 1; c <= maxCols; c++) {
+          const gap = Math.max(0, Math.min(14, Math.round((W / c) * 0.12)))
+          const r = Math.ceil(n / c)
+          const cwFull = (W - (c - 1) * gap) / c
+          const cw = Math.min(cwFull, (H - (r - 1) * gap) / r / CARD_AR)
+          if (cw < minW + 0.5) continue
+          const area = cw * cw
+          if (!best || area > best.area) {
+            best = { c, width: cw < cwFull - 0.5 ? c * cw + (c - 1) * gap : W, gap, area }
+          }
+        }
+        if (best) break
+      }
+      if (best) {
+        g.style.width = best.width < W - 0.5 ? `${best.width}px` : ''
+        g.style.gap = `${best.gap}px`
+        g.style.gridTemplateColumns = `repeat(${best.c}, minmax(0, 1fr))`
+      }
+    }
+    compute()
+    window.addEventListener('resize', compute)
+    return () => window.removeEventListener('resize', compute)
+  }, [deck])
 
   const flipCard = (i: number, kind: 'drink' | 'safe') => {
     if (locked || flipped.includes(i)) return
@@ -325,13 +311,7 @@ function Game({ onReset }: { onReset: () => void }) {
     <>
       <div className="wd-shell wd-shell--game">
         <div className="wd-bar">
-          <button
-            type="button"
-            className="wd-bar-btn"
-            aria-label="重新设置"
-            onClick={onReset}
-            dangerouslySetInnerHTML={{ __html: SVG_BACK_BAR }}
-          />
+          <button type="button" className="wd-bar-btn" aria-label="重新设置" onClick={onReset} />
           <div className="wd-bar-center">
             <span className="wd-bar-count">
               剩余 <b>{remaining}</b> 杯
@@ -342,7 +322,7 @@ function Game({ onReset }: { onReset: () => void }) {
           </div>
           <div className="wd-bar-spacer"></div>
         </div>
-        <div className="wd-grid">
+        <div className="wd-grid" ref={gridRef}>
           {deck.map((kind, i) => {
             const flippedNow = flipped.includes(i)
             const cardClass = `wd-card${flippedNow ? ' is-flipped' : ''}${
@@ -357,19 +337,14 @@ function Game({ onReset }: { onReset: () => void }) {
                 onClick={() => flipCard(i, kind)}
               >
                 <span className="wd-card-inner">
-                  <span
-                    className="wd-card-face wd-card-face--back"
-                    dangerouslySetInnerHTML={{ __html: SVG_BACK }}
-                  />
-                  <span
-                    className={`wd-card-face wd-card-face--front wd-card-face--${kind}`}
-                    dangerouslySetInnerHTML={{ __html: kind === 'drink' ? SVG_GLASS : SVG_SAFE }}
-                  />
+                  <span className="wd-card-face wd-card-face--back" />
+                  <span className={`wd-card-face wd-card-face--front wd-card-face--${kind}`} />
                 </span>
               </button>
             )
           })}
         </div>
+        <p className="wd-footer">木质酒馆聚会游戏 · 合理饮酒 · 量力而行</p>
       </div>
       {modal ? (
         <div className={`wd-overlay${leaving ? ' is-leaving' : ''}`}>
@@ -395,21 +370,7 @@ export default function WhoDrinks() {
 
   return (
     <>
-      <div className="wd-texture" aria-hidden="true" />
-      <a className="wd-back-link" href="/" aria-label="返回大厅">
-        <svg
-          viewBox="0 0 24 24"
-          width="20"
-          height="20"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M19 12H5M12 19l-7-7 7-7" />
-        </svg>
-      </a>
+      <a className="wd-back-link" href="/" aria-label="返回大厅" />
       <div className="wd-app">
         {screen === 'setup' ? (
           <Setup
