@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "useDefineForClassFields": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "types": ["vite/client", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@games/shared": ["packages/shared/src/index.ts"],
+      "@games/lobby": ["packages/lobby/src/index.tsx"],
+      "@games/game-a": ["packages/game-a/src/index.tsx"],
+      "@games/game-b": ["packages/game-b/src/index.tsx"],
+      "@games/number-detective": ["packages/number-detective/src/index.tsx"],
+      "@games/who-drinks": ["packages/who-drinks/src/index.tsx"]
+    }
+  },
+  "include": ["src", "packages", "vite.config.ts"]
+}

@@ -1,11 +1,13 @@
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
 export default defineConfig({
   root: __dirname,
   plugins: [
+    react(),
     tailwindcss(),
     nodePolyfills({
       include: ['process', 'buffer', 'events'],
@@ -15,17 +17,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@games/shared': resolve(__dirname, 'packages/shared/src'),
-    },
-  },
-  build: {
-    rollupOptions: {
-      input: {
-        lobby: resolve(__dirname, 'index.html'),
-        'game-a': resolve(__dirname, 'game-a.html'),
-        'game-b': resolve(__dirname, 'game-b.html'),
-        'number-detective': resolve(__dirname, 'number-detective.html'),
-        'who-drinks': resolve(__dirname, 'who-drinks.html'),
-      },
+      '@games/lobby': resolve(__dirname, 'packages/lobby/src'),
+      '@games/game-a': resolve(__dirname, 'packages/game-a/src'),
+      '@games/game-b': resolve(__dirname, 'packages/game-b/src'),
+      '@games/number-detective': resolve(__dirname, 'packages/number-detective/src'),
+      '@games/who-drinks': resolve(__dirname, 'packages/who-drinks/src'),
     },
   },
 })
