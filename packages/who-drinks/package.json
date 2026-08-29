@@ -1,0 +1,8 @@
+{
+  "name": "@games/who-drinks",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@games/shared": "workspace:*"
+  }
+}

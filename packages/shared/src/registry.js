@@ -26,6 +26,15 @@ export const games = [
     description: '局域网双人数字破译',
     color: '#10b981',
   },
+  {
+    id: 'who-drinks',
+    name: '谁喝酒',
+    url: '/who-drinks.html',
+    icon: '🍷',
+    tags: ['聚会'],
+    description: '翻牌喝酒，杯杯见真情',
+    color: '#c6283a',
+  },
 ]
 
 export function getGame(id) {
