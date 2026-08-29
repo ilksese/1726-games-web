@@ -1,4 +1,4 @@
-export function createHistoryInline({ onLeave } = {}) {
+export function createHistoryInline() {
   const wrap = document.createElement('section')
   wrap.className = 'nd-card nd-panel nd-animate'
   wrap.innerHTML = `
@@ -11,7 +11,6 @@ export function createHistoryInline({ onLeave } = {}) {
       <button type="button" data-tab="opp" class="nd-history-tab" aria-pressed="false">对手</button>
     </div>
     <div data-list class="nd-history-list"></div>
-    <button type="button" data-leave class="nd-history-leave">返回首页</button>
   `
 
   let myEntries = []
@@ -22,7 +21,6 @@ export function createHistoryInline({ onLeave } = {}) {
   const tabMine = wrap.querySelector('[data-tab="mine"]')
   const tabOpp = wrap.querySelector('[data-tab="opp"]')
   const roundEl = wrap.querySelector('[data-round]')
-  const leaveBtn = wrap.querySelector('[data-leave]')
 
   function getBadge(entry) {
     const text = entry.resultText || ''
@@ -99,10 +97,6 @@ export function createHistoryInline({ onLeave } = {}) {
   })
   tabOpp.addEventListener('click', () => {
     setActiveTab('opp')
-  })
-
-  leaveBtn.addEventListener('click', () => {
-    onLeave?.()
   })
 
   return { element: wrap, setMyEntries, setOppEntries, showMine, showOpp }

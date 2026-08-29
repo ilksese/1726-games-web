@@ -235,13 +235,7 @@ function init() {
 
   function goToPlay() {
     guessInput = createGuessInput()
-    history = createHistoryInline({
-      onLeave: () => {
-        cleanConnection()
-        engine = null
-        window.location.href = '/'
-      },
-    })
+    history = createHistoryInline()
     toast = createFeedbackToast()
 
     function handleDigit(d) {
