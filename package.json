@@ -5,18 +5,28 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
     "worker:dev": "pnpm dlx wrangler dev --config workers/matchmaking/wrangler.toml",
     "worker:deploy": "pnpm dlx wrangler deploy --config workers/matchmaking/wrangler.toml"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4",
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4",
     "tailwindcss": "^4",
+    "typescript": "^5",
     "vite": "^6",
     "vite-plugin-node-polyfills": "^0.28.0"
   },
   "dependencies": {
     "events": "^3.3.0",
+    "jotai": "^2",
     "pixi.js": "^8",
-    "process": "^0.11.10"
+    "process": "^0.11.10",
+    "react": "^19",
+    "react-dom": "^19",
+    "react-router-dom": "^7"
   }
 }

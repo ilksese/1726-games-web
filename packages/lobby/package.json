@@ -3,6 +3,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@games/shared": "workspace:*"
+    "@games/shared": "workspace:*",
+    "jotai": "^2",
+    "react": "^19",
+    "react-router-dom": "^7"
   }
 }
