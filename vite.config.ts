@@ -24,6 +24,7 @@ export default defineConfig({
         'game-a': resolve(__dirname, 'game-a.html'),
         'game-b': resolve(__dirname, 'game-b.html'),
         'number-detective': resolve(__dirname, 'number-detective.html'),
+        'who-drinks': resolve(__dirname, 'who-drinks.html'),
       },
     },
   },
