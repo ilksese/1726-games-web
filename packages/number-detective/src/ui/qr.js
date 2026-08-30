@@ -2,14 +2,14 @@ import QRCode from 'qrcode'
 
 export async function renderQr(data, width) {
   const wrapper = document.createElement('div')
-  wrapper.className = 'bg-white p-3 rounded-xl'
+  wrapper.className = 'nd-qr-shell'
 
   const canvas = document.createElement('canvas')
   try {
     await QRCode.toCanvas(canvas, data, { width: width ?? 250, margin: 1, errorCorrectionLevel: 'M' })
   } catch (e) {
     wrapper.textContent = '二维码生成失败'
-    wrapper.className = 'bg-red-900/50 p-3 rounded-xl text-red-300 text-sm'
+    wrapper.className = 'nd-qr-shell nd-qr-shell--error text-sm'
     return wrapper
   }
   canvas.className = 'block'

@@ -77,10 +77,10 @@ function init() {
   function goToRoleSelect(error) {
     cleanConnection()
     switchScreen(createRoleSelectScreen({
-      onCreate: () => goToExchange('host'),
-      onJoin: () => goToExchange('guest'),
-      onCreateBeta: () => goToExchange('host-beta'),
-      onJoinBeta: () => goToExchange('guest-beta'),
+      onCreateLan: () => goToExchange('host'),
+      onJoinLan: () => goToExchange('guest'),
+      onCreateCloudflare: () => goToExchange('host-cloudflare'),
+      onJoinCloudflare: () => goToExchange('guest-cloudflare'),
       error,
     }))
   }
@@ -90,7 +90,7 @@ function init() {
 
     function handleConnected({ peer: p }) {
       peer = p
-      isHost = mode === 'host' || mode === 'host-beta'
+      isHost = mode === 'host' || mode === 'host-cloudflare'
       peer.on('data', (data) => {
         const text = typeof data === 'string' ? data : new TextDecoder().decode(data)
         handleGameMessage(JSON.parse(text))
@@ -102,7 +102,7 @@ function init() {
       goToSetup()
     }
 
-    if (mode === 'host-beta' || mode === 'guest-beta') {
+    if (mode === 'host-cloudflare' || mode === 'guest-cloudflare') {
       exchangeScreen = createRoomExchangeScreen({
         mode,
         onConnected: handleConnected,
@@ -275,7 +275,11 @@ function init() {
     guessInput.digits = ''
     guessInput.setValue('')
 
-    playScreen = createPlayScreen({ guessInput, keypad, history })
+    playScreen = createPlayScreen({
+      guessInput,
+      keypad,
+      history,
+    })
     switchScreen(playScreen.element)
     root.appendChild(toast.element)
     overlayEls.push(toast.element)

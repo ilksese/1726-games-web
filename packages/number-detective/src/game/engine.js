@@ -50,6 +50,8 @@ export class GameEngine {
       entry.red = true
       entry.resultText = '赛点! 4位正确'
       response = { type: 'feedback', matchPoint: true, correctDigits: 4 }
+      this.isOver = true
+      this.won = false
     } else {
       entry.resultText = `${fb.correctDigits}位正确`
       response = { type: 'feedback', correctDigits: fb.correctDigits }
@@ -72,6 +74,8 @@ export class GameEngine {
       this.myMatchPoint = true
       last.red = true
       last.resultText = '赛点! 4位正确'
+      this.isOver = true
+      this.won = true
     } else if (feedback.binary === false) {
       last.resultText = '错 ✗'
     } else {

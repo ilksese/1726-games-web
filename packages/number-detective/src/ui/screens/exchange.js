@@ -3,10 +3,10 @@ import { createHostPeer, createGuestPeer, applyAnswer } from '../../net/signalin
 
 export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }) {
   const wrap = document.createElement('div')
-  wrap.className = 'min-h-screen flex flex-col items-center px-4 pt-16 pb-8'
+  wrap.className = 'nd-shell nd-shell--stack'
 
   const videoEl = document.createElement('video')
-  videoEl.className = 'hidden w-full max-w-sm rounded-xl mt-4'
+  videoEl.className = 'hidden w-full max-w-sm rounded-2xl mt-4'
 
   let scanner = null
   let destroyed = false
@@ -34,7 +34,7 @@ export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }
     const qr = await renderQr(answerUrl, 250)
     qrWrap.innerHTML = ''
     qrWrap.appendChild(qr)
-    qrWrap.className = 'mb-4'
+    qrWrap.className = 'flex justify-center mb-4'
 
     // Link
     linkInput.value = answerUrl
@@ -51,26 +51,31 @@ export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }
   // --- HOST MODE ---
   if (mode === 'host') {
     wrap.innerHTML = `
-      <h2 class="text-3xl font-semibold text-white mb-2">创建游戏房间</h2>
-      <p class="text-gray-400 text-sm mb-2">请对手扫描二维码或打开链接加入</p>
-      <div data-qr class="mb-4"></div>
-      <div data-link-wrap class="w-full max-w-md mb-8">
-        <p class="text-gray-400 text-xs mb-1">分享链接：</p>
-        <div class="flex gap-2">
-          <input data-link-input type="text" readonly class="flex-1 px-3 py-2 rounded-lg bg-gray-800 text-gray-300 text-xs border border-gray-700" />
-          <button data-copy type="button" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm transition-colors">复制</button>
+      <div>
+        <h2 class="nd-screen-title">创建游戏房间</h2>
+        <p class="nd-screen-subtitle">请对手扫描二维码或打开链接加入</p>
+      </div>
+      <section class="nd-card nd-panel nd-stack">
+        <div data-qr class="flex justify-center"></div>
+        <div data-link-wrap class="nd-stack w-full">
+          <p class="text-xs text-slate-500">分享链接</p>
+          <div class="flex gap-2">
+            <input data-link-input type="text" readonly class="nd-input flex-1 text-xs" />
+            <button data-copy type="button" class="nd-btn nd-btn--secondary whitespace-nowrap">复制</button>
+          </div>
         </div>
-      </div>
-      <div class="w-full max-w-md border-t border-gray-700 my-4"></div>
-      <p class="text-gray-400 text-sm mb-3">收到对手的应答后，粘贴链接或扫码：</p>
-      <div class="flex gap-2 w-full max-w-md mb-3">
-        <input data-answer-input type="text" placeholder="粘贴对手的应答链接" class="flex-1 px-3 py-2 rounded-lg bg-gray-800 text-white text-sm border border-gray-700" />
-        <button data-answer-paste type="button" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm transition-colors">确认</button>
-      </div>
-      <button data-scan type="button" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm transition-colors">扫描对手的应答二维码</button>
-      <div data-await class="mt-6 text-amber-400 text-lg whitespace-pre-line text-center hidden">等待对手加入...</div>
-      <p data-error class="mt-4 text-red-400 text-sm text-center"></p>
-      <button data-back type="button" class="mt-8 text-gray-400 hover:text-white text-sm">&larr; 返回</button>
+      </section>
+      <section class="nd-card nd-panel nd-stack">
+        <p class="nd-screen-subtitle">收到对手的应答后，粘贴链接或扫码：</p>
+        <div class="flex gap-2 w-full">
+          <input data-answer-input type="text" placeholder="粘贴对手的应答链接" class="nd-input flex-1" />
+          <button data-answer-paste type="button" class="nd-btn nd-btn--primary whitespace-nowrap">确认</button>
+        </div>
+        <button data-scan type="button" class="nd-btn nd-btn--secondary w-full">扫描对手的应答二维码</button>
+        <div data-await class="nd-surface-note text-center whitespace-pre-line hidden">等待对手加入...</div>
+        <p data-error class="text-center text-sm text-red-300"></p>
+      </section>
+      <button data-back type="button" class="nd-btn nd-btn--ghost self-center">&larr; 返回</button>
     `
 
     // Start WebRTC host flow
@@ -143,29 +148,32 @@ export function createExchangeScreen({ mode, onConnected, onBack, encodedOffer }
   // --- GUEST MODE ---
   else {
     wrap.innerHTML = `
-      <h2 class="text-3xl font-semibold text-white mb-6">加入游戏房间</h2>
-      <div data-guest-init class="w-full max-w-md">
-        <p class="text-gray-400 text-sm mb-3">粘贴主机分享的链接，或扫描二维码：</p>
-        <div class="flex gap-2 mb-4">
-          <input data-offer-input type="text" placeholder="粘贴主机分享的链接" class="flex-1 px-3 py-2 rounded-lg bg-gray-800 text-white text-sm border border-gray-700" />
-          <button data-offer-paste type="button" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm transition-colors">确认</button>
-        </div>
-        <button data-offer-scan type="button" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm transition-colors">扫描主机二维码</button>
+      <div>
+        <h2 class="nd-screen-title">加入游戏房间</h2>
+        <p class="nd-screen-subtitle">粘贴主机分享的链接，或扫描二维码</p>
       </div>
-      <div data-guest-answer class="w-full max-w-md hidden">
-        <p class="text-gray-400 text-sm mb-2">请主机扫描此码或复制链接确认连接</p>
-        <div data-qr class="mb-4"></div>
-        <div data-link-wrap class="w-full max-w-md mb-8 hidden">
-          <p class="text-gray-400 text-xs mb-1">应答链接：</p>
+      <div data-guest-init class="nd-card nd-panel nd-stack w-full">
+        <p class="nd-screen-subtitle">输入主机分享的链接</p>
+        <div class="flex gap-2 w-full">
+          <input data-offer-input type="text" placeholder="粘贴主机分享的链接" class="nd-input flex-1" />
+          <button data-offer-paste type="button" class="nd-btn nd-btn--primary whitespace-nowrap">确认</button>
+        </div>
+        <button data-offer-scan type="button" class="nd-btn nd-btn--secondary w-full">扫描主机二维码</button>
+      </div>
+      <div data-guest-answer class="nd-card nd-panel nd-stack hidden">
+        <p class="nd-screen-subtitle">请主机扫描此码或复制链接确认连接</p>
+        <div data-qr class="flex justify-center"></div>
+        <div data-link-wrap class="nd-stack hidden">
+          <p class="text-xs text-slate-500">应答链接</p>
           <div class="flex gap-2">
-            <input data-link-input type="text" readonly class="flex-1 px-3 py-2 rounded-lg bg-gray-800 text-gray-300 text-xs border border-gray-700" />
-            <button data-copy type="button" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm transition-colors">复制</button>
+            <input data-link-input type="text" readonly class="nd-input flex-1 text-xs" />
+            <button data-copy type="button" class="nd-btn nd-btn--secondary whitespace-nowrap">复制</button>
           </div>
         </div>
-        <div data-await class="text-amber-400 text-lg text-center hidden">等待主机确认...</div>
+        <div data-await class="nd-surface-note text-center hidden">等待主机确认...</div>
       </div>
-      <p data-error class="mt-4 text-red-400 text-sm text-center"></p>
-      <button data-back type="button" class="mt-8 text-gray-400 hover:text-white text-sm">&larr; 返回</button>
+      <p data-error class="text-center text-sm text-red-300"></p>
+      <button data-back type="button" class="nd-btn nd-btn--ghost self-center">&larr; 返回</button>
     `
 
     function handleOffer(raw) {
