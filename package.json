@@ -7,7 +7,10 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "worker:dev": "pnpm dlx wrangler dev --config workers/matchmaking/wrangler.toml",
-    "worker:deploy": "pnpm dlx wrangler deploy --config workers/matchmaking/wrangler.toml"
+    "worker:deploy": "pnpm dlx wrangler deploy --config workers/matchmaking/wrangler.toml",
+    "server:dev": "cd packages/server && go run ./cmd/server",
+    "server:build": "pnpm --filter @games/server build",
+    "server:test": "pnpm --filter @games/server test"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4",

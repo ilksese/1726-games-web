@@ -1,0 +1,11 @@
+{
+  "name": "@games/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "1726 Games 局域网私密组队房间服务器",
+  "scripts": {
+    "dev": "go run ./cmd/server",
+    "build": "mkdir -p dist && go build -trimpath -o dist/1726-games-server ./cmd/server",
+    "test": "go test -race ./..."
+  }
+}

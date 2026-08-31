@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#07120f" />
+    <title>1726 局域网组队房间</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+    <script type="module" src="/assets/app.js"></script>
+  </head>
+  <body>
+    <div class="ambient ambient--one" aria-hidden="true"></div>
+    <div class="ambient ambient--two" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="返回当前房间">
+        <span class="brand__mark" aria-hidden="true">17</span>
+        <span>
+          <strong>1726 GAMES</strong>
+          <small>LAN PARTY ROOM</small>
+        </span>
+      </a>
+      <div id="connectionBadge" class="connection connection--idle" role="status">
+        <span class="connection__dot" aria-hidden="true"></span>
+        <span id="connectionText">准备连接</span>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero" aria-label="当前房间">
+        <div class="room-code-card" aria-label="房间号">
+          <span>ROOM CODE</span>
+          <strong id="heroRoomCode">------</strong>
+        </div>
+      </section>
+
+      <section id="fatalView" class="panel fatal" hidden>
+        <span class="fatal__icon" aria-hidden="true">!</span>
+        <div>
+          <h2>无法进入房间</h2>
+          <p id="fatalMessage">房间地址无效。</p>
+        </div>
+      </section>
+
+      <section id="joinView" class="panel join-panel" aria-labelledby="joinTitle" hidden>
+        <div class="join-panel__art" aria-hidden="true">
+          <span>↗</span>
+          <div class="radar-ring radar-ring--one"></div>
+          <div class="radar-ring radar-ring--two"></div>
+        </div>
+        <div class="join-panel__content">
+          <p class="section-kicker">JOIN THE SQUAD</p>
+          <h2 id="joinTitle">输入昵称，加入队伍</h2>
+          <p>昵称只会显示给当前局域网房间内的玩家。</p>
+          <form id="joinForm" class="stack-form">
+            <label for="joinName">玩家昵称</label>
+            <div class="input-row">
+              <input id="joinName" name="name" maxlength="20" autocomplete="nickname" placeholder="例如：蓝色玩家" required />
+              <button id="joinButton" class="button button--primary" type="submit">加入房间</button>
+            </div>
+            <p id="joinError" class="form-error" role="alert"></p>
+          </form>
+        </div>
+      </section>
+
+      <section id="roomView" hidden>
+        <div class="room-grid">
+          <article class="panel invite-panel" aria-labelledby="inviteTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">INVITE PLAYERS</p>
+                <h2 id="inviteTitle">邀请队友</h2>
+              </div>
+              <span class="pill">仅限局域网</span>
+            </div>
+
+            <div class="invite-content">
+              <div class="qr-frame">
+                <img id="qrImage" width="240" height="240" alt="当前房间邀请二维码" draggable="false" />
+                <span class="qr-corner qr-corner--tl" aria-hidden="true"></span>
+                <span class="qr-corner qr-corner--tr" aria-hidden="true"></span>
+                <span class="qr-corner qr-corner--bl" aria-hidden="true"></span>
+                <span class="qr-corner qr-corner--br" aria-hidden="true"></span>
+              </div>
+              <div class="invite-details">
+                <div>
+                  <span class="meta-label">房间号</span>
+                  <strong id="inviteRoomCode" class="invite-code">------</strong>
+                </div>
+                <div>
+                  <label class="meta-label" for="inviteLink">邀请链接</label>
+                  <input id="inviteLink" class="link-field" readonly />
+                </div>
+                <div class="button-row">
+                  <button id="copyButton" class="button button--secondary" type="button">复制链接</button>
+                  <button id="shareButton" class="button button--ghost" type="button">分享</button>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel team-panel" aria-labelledby="teamTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">TEAM STATUS</p>
+                <h2 id="teamTitle">当前队伍</h2>
+              </div>
+              <span id="playerCount" class="count-badge">0 人</span>
+            </div>
+            <ul id="playerList" class="player-list" aria-live="polite"></ul>
+          </article>
+        </div>
+
+        <article class="panel control-panel">
+          <div class="profile-block">
+            <div class="profile-block__icon" aria-hidden="true">◎</div>
+            <div class="profile-block__body">
+              <span class="meta-label">我的昵称</span>
+              <form id="renameForm" class="rename-form">
+                <input id="renameInput" maxlength="20" autocomplete="nickname" aria-label="修改我的昵称" />
+                <button class="text-button" type="submit">保存</button>
+              </form>
+            </div>
+          </div>
+
+          <div class="start-block">
+            <p id="startHint">等待房间状态同步…</p>
+            <button id="startButton" class="button button--start" type="button" hidden>
+              <span aria-hidden="true">▶</span>
+              发起开局确认
+            </button>
+          </div>
+
+          <button id="leaveButton" class="button button--danger-ghost" type="button">离开房间</button>
+        </article>
+      </section>
+
+      <section id="startedView" class="panel started-panel" hidden aria-labelledby="startedTitle">
+        <div class="started-emblem" aria-hidden="true">
+          <span>✓</span>
+        </div>
+        <p class="section-kicker">ALL PLAYERS CONFIRMED</p>
+        <h2 id="startedTitle">全员确认，游戏开始</h2>
+        <p id="startedMessage">所有设备已经同步进入游戏状态。</p>
+        <div id="startedPlayers" class="started-players"></div>
+        <button id="enterGameButton" class="button button--primary" type="button" hidden>立即进入游戏</button>
+      </section>
+    </main>
+
+    <dialog id="confirmDialog" class="confirm-dialog" aria-labelledby="confirmTitle" aria-describedby="confirmDescription">
+      <div class="confirm-dialog__signal" aria-hidden="true">
+        <span>!</span>
+      </div>
+      <p class="section-kicker">CAPTAIN REQUEST</p>
+      <h2 id="confirmTitle">队长请求开启游戏</h2>
+      <p id="confirmDescription">所有玩家都同意后，房间才会统一进入游戏。</p>
+
+      <div class="confirmation-progress">
+        <div class="confirmation-progress__labels">
+          <span>确认进度</span>
+          <strong id="confirmProgressText">0 / 0</strong>
+        </div>
+        <progress id="confirmProgressBar" class="progress-track" max="1" value="0" aria-label="全员确认进度"></progress>
+      </div>
+
+      <div id="confirmActions" class="confirm-actions">
+        <button id="declineButton" class="button button--danger-ghost" type="button">暂不开始</button>
+        <button id="agreeButton" class="button button--primary" type="button">同意并准备</button>
+      </div>
+      <div id="confirmedWaiting" class="confirmed-waiting" hidden>
+        <span class="spinner" aria-hidden="true"></span>
+        <span>你已同意，正在等待其他玩家…</span>
+      </div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <noscript>
+      <div class="noscript">此房间需要启用 JavaScript 才能实时同步玩家状态。</div>
+    </noscript>
+  </body>
+</html>
