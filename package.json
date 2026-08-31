@@ -5,6 +5,7 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
+    "lan:dev": "node scripts/lan-dev.mjs",
     "typecheck": "tsc --noEmit",
     "worker:dev": "pnpm dlx wrangler dev --config workers/matchmaking/wrangler.toml",
     "worker:deploy": "pnpm dlx wrangler deploy --config workers/matchmaking/wrangler.toml",

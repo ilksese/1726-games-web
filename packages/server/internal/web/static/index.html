@@ -91,6 +91,11 @@
                   <label class="meta-label" for="inviteLink">邀请链接</label>
                   <input id="inviteLink" class="link-field" readonly />
                 </div>
+                <div id="inviteAddresses" class="invite-addresses" hidden>
+                  <span class="meta-label">局域网地址</span>
+                  <a id="mdnsLink" class="address-link" target="_blank" rel="noreferrer"></a>
+                  <a id="ipLink" class="address-link address-link--muted" target="_blank" rel="noreferrer"></a>
+                </div>
                 <div class="button-row">
                   <button id="copyButton" class="button button--secondary" type="button">复制链接</button>
                   <button id="shareButton" class="button button--ghost" type="button">分享</button>
@@ -110,6 +115,28 @@
             <ul id="playerList" class="player-list" aria-live="polite"></ul>
           </article>
         </div>
+
+        <article id="configPanel" class="panel config-panel" hidden aria-labelledby="configTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="section-kicker">GAME CONFIG</p>
+              <h2 id="configTitle">队长选择配置</h2>
+            </div>
+            <span class="pill">谁喝酒</span>
+          </div>
+          <form id="configForm" class="config-form">
+            <label>
+              <span class="meta-label">卡牌数量</span>
+              <input id="configTotal" class="config-input" type="number" min="2" max="36" inputmode="numeric" required />
+            </label>
+            <label>
+              <span class="meta-label">酒杯数量</span>
+              <input id="configDrinks" class="config-input" type="number" min="1" max="35" inputmode="numeric" required />
+            </label>
+            <button id="configSaveButton" class="button button--secondary" type="submit">保存配置</button>
+            <p id="configHint" class="config-hint">只有队长可以修改配置。</p>
+          </form>
+        </article>
 
         <article class="panel control-panel">
           <div class="profile-block">
@@ -135,6 +162,28 @@
         </article>
       </section>
 
+      <section id="gameSelectView" class="panel game-select-panel" hidden aria-labelledby="gameSelectTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">CHOOSE THE GAME</p>
+            <h2 id="gameSelectTitle">选择本局游戏</h2>
+          </div>
+          <span class="pill">全员已同意</span>
+        </div>
+        <div class="game-option-grid">
+          <button id="whoDrinksOption" class="game-option" type="button">
+            <span class="game-option__icon" aria-hidden="true">🍷</span>
+            <span class="game-option__body">
+              <strong>谁喝酒</strong>
+              <small>多人同步翻牌，翻到酒杯的人喝一杯</small>
+            </span>
+            <span class="game-option__arrow" aria-hidden="true">→</span>
+          </button>
+        </div>
+        <p id="gameSelectHint" class="game-select-hint">等待队长选择游戏。</p>
+        <button id="cancelStartButton" class="button button--ghost" type="button" hidden>返回等待</button>
+      </section>
+
       <section id="startedView" class="panel started-panel" hidden aria-labelledby="startedTitle">
         <div class="started-emblem" aria-hidden="true">
           <span>✓</span>
@@ -144,6 +193,14 @@
         <p id="startedMessage">所有设备已经同步进入游戏状态。</p>
         <div id="startedPlayers" class="started-players"></div>
         <button id="enterGameButton" class="button button--primary" type="button" hidden>立即进入游戏</button>
+      </section>
+
+      <section id="finishedView" class="panel finished-panel" hidden aria-labelledby="finishedTitle">
+        <div class="started-emblem" aria-hidden="true"><span>✓</span></div>
+        <p class="section-kicker">ROUND COMPLETE</p>
+        <h2 id="finishedTitle">本局游戏结束</h2>
+        <p id="finishedMessage">队长可以重新开启房间，开始下一局。</p>
+        <button id="reopenButton" class="button button--primary" type="button" hidden>重新开启房间</button>
       </section>
     </main>
 

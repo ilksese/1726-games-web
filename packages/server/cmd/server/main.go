@@ -19,19 +19,24 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ilksese/1726-games-web/packages/server/internal/discovery"
 	"github.com/ilksese/1726-games-web/packages/server/internal/room"
 	"github.com/ilksese/1726-games-web/packages/server/internal/web"
 	qrcode "github.com/skip2/go-qrcode"
 )
 
 type config struct {
-	bindAddress    string
-	port           string
-	advertiseHost  string
-	publicURL      string
-	gameURL        string
-	roomCode       string
-	disconnectWait time.Duration
+	bindAddress         string
+	port                string
+	advertiseHost       string
+	publicURL           string
+	webURL              string
+	gameURL             string
+	roomCode            string
+	mdnsEnabled         bool
+	mdnsHost            string
+	disconnectWait      time.Duration
+	confirmationTimeout time.Duration
 }
 
 func main() {
@@ -60,13 +65,86 @@ func run() error {
 	defer listener.Close()
 
 	actualPortText := strconv.Itoa(actualPort)
-	inviteURL, err := buildInviteURL(cfg.publicURL, cfg.advertiseHost, actualPortText, cfg.roomCode)
+	logger := log.New(os.Stdout, "[1726-server] ", log.LstdFlags)
+
+	ipInviteURL, err := buildInviteURL("", cfg.advertiseHost, actualPortText, cfg.roomCode)
 	if err != nil {
 		return err
 	}
-	gameURL := strings.ReplaceAll(cfg.gameURL, "{room}", cfg.roomCode)
-	gameRoom := room.New(cfg.roomCode, gameURL, cfg.disconnectWait)
-	handler, err := web.New(gameRoom, inviteURL)
+	configuredInviteURL, err := buildInviteURL(cfg.publicURL, cfg.advertiseHost, actualPortText, cfg.roomCode)
+	if err != nil {
+		return err
+	}
+
+	var mdnsAdvertisement *discovery.Advertisement
+	if cfg.mdnsEnabled {
+		mdnsAdvertisement, err = discovery.Register(cfg.mdnsHost, cfg.advertiseHost, actualPort, cfg.roomCode)
+		if err != nil {
+			logger.Printf("mDNS 注册失败，将继续使用局域网 IP：%v", err)
+		} else {
+			defer mdnsAdvertisement.Close()
+			logger.Printf("mDNS 地址：%s", mdnsAdvertisement.URL(cfg.roomCode))
+		}
+	}
+
+	mdnsURL := ""
+	preferredHost := cfg.advertiseHost
+	if mdnsAdvertisement != nil {
+		mdnsURL = mdnsAdvertisement.URL(cfg.roomCode)
+		preferredHost = mdnsAdvertisement.Hostname()
+	}
+	inviteURL := ipInviteURL
+	if mdnsURL != "" {
+		inviteURL = mdnsURL
+	}
+	if cfg.publicURL != "" {
+		inviteURL = configuredInviteURL
+	}
+
+	webURL := cfg.webURL
+	if webURL == "" {
+		webURL = "http://" + net.JoinHostPort(preferredHost, "5173")
+	}
+	gameURLTemplate := cfg.gameURL
+	if gameURLTemplate == "" {
+		gameURLTemplate = strings.TrimRight(webURL, "/") + "/{game}"
+	}
+	serverOrigin, err := urlOrigin(inviteURL)
+	if err != nil {
+		return fmt.Errorf("解析房间服务地址: %w", err)
+	}
+	allowedOrigins := make([]string, 0, 3)
+	originCandidates := []string{
+		gameURLTemplate,
+		"http://" + net.JoinHostPort(cfg.advertiseHost, "5173"),
+	}
+	if mdnsAdvertisement != nil {
+		originCandidates = append(originCandidates, "http://"+net.JoinHostPort(mdnsAdvertisement.Hostname(), "5173"))
+	}
+	seenOrigins := make(map[string]struct{})
+	for _, candidate := range originCandidates {
+		origin, originErr := urlOrigin(candidate)
+		if originErr != nil {
+			continue
+		}
+		if _, seen := seenOrigins[origin]; seen {
+			continue
+		}
+		seenOrigins[origin] = struct{}{}
+		allowedOrigins = append(allowedOrigins, origin)
+	}
+	gameRoom := room.New(cfg.roomCode, room.Options{
+		GameURLTemplate:     gameURLTemplate,
+		ServerURL:           serverOrigin,
+		DisconnectGrace:     cfg.disconnectWait,
+		ConfirmationTimeout: cfg.confirmationTimeout,
+	})
+	defer gameRoom.Close()
+	handler, err := web.New(gameRoom, web.InviteInfo{
+		PrimaryURL: inviteURL,
+		IPURL:      ipInviteURL,
+		MDNSURL:    mdnsURL,
+	}, allowedOrigins)
 	if err != nil {
 		return err
 	}
@@ -80,12 +158,12 @@ func run() error {
 		MaxHeaderBytes:    1 << 20,
 	}
 
-	logger := log.New(os.Stdout, "[1726-server] ", log.LstdFlags)
 	logger.Printf("局域网房间已创建，房间号 %s", cfg.roomCode)
 	if actualPort != requestedPort {
 		logger.Printf("端口 %d 已被占用，自动切换到端口 %d", requestedPort, actualPort)
 	}
 	logger.Printf("邀请链接：%s", inviteURL)
+	logger.Printf("局域网 IP 地址：%s", ipInviteURL)
 	logger.Printf("本机入口：http://localhost:%s/room/%s", actualPortText, cfg.roomCode)
 	printTerminalQRCode(os.Stdout, inviteURL)
 
@@ -137,10 +215,14 @@ func loadConfig(arguments []string) (config, error) {
 	flags.StringVar(&cfg.bindAddress, "bind", envOr("BIND_ADDRESS", "0.0.0.0"), "监听地址")
 	flags.StringVar(&cfg.port, "port", envOr("PORT", "5174"), "监听端口")
 	flags.StringVar(&cfg.advertiseHost, "advertise-host", strings.TrimSpace(os.Getenv("ADVERTISE_HOST")), "二维码中使用的局域网主机名或 IP")
-	flags.StringVar(&cfg.publicURL, "public-url", strings.TrimSpace(os.Getenv("PUBLIC_URL")), "对外访问根地址，可使用 {code} 占位符")
-	flags.StringVar(&cfg.gameURL, "game-url", strings.TrimSpace(os.Getenv("GAME_URL")), "全员确认后跳转的游戏地址，可使用 {room} 占位符")
+	flags.StringVar(&cfg.publicURL, "public-url", strings.TrimSpace(os.Getenv("PUBLIC_URL")), "对外访问根地址，可使用 {code}、{port} 占位符")
+	flags.StringVar(&cfg.webURL, "web-url", strings.TrimSpace(os.Getenv("WEB_URL")), "游戏前端根地址，默认使用局域网主机的 5173 端口")
+	flags.StringVar(&cfg.gameURL, "game-url", strings.TrimSpace(os.Getenv("GAME_URL")), "全员确认后跳转的游戏地址，可使用 {game}、{room} 占位符")
 	flags.StringVar(&cfg.roomCode, "room-code", defaultRoomCode, "固定 6 位房间号")
+	flags.BoolVar(&cfg.mdnsEnabled, "mdns", envBool("MDNS_ENABLED", true), "启用 mDNS 局域网域名")
+	flags.StringVar(&cfg.mdnsHost, "mdns-host", envOr("MDNS_HOST", "1726-games"), "mDNS 主机名，例如 1726-games")
 	flags.DurationVar(&cfg.disconnectWait, "disconnect-grace", envDuration("DISCONNECT_GRACE", 20*time.Second), "离线玩家保留时长")
+	flags.DurationVar(&cfg.confirmationTimeout, "confirmation-timeout", envDuration("CONFIRMATION_TIMEOUT", 60*time.Second), "开局确认超时时长")
 	if err := flags.Parse(arguments); err != nil {
 		return config{}, err
 	}
@@ -160,8 +242,16 @@ func loadConfig(arguments []string) (config, error) {
 	if err := validateRoomCode(cfg.roomCode); err != nil {
 		return config{}, err
 	}
+	if cfg.mdnsEnabled {
+		if _, err := discovery.NormalizeHostname(cfg.mdnsHost); err != nil {
+			return config{}, err
+		}
+	}
 	if cfg.disconnectWait < time.Second {
 		return config{}, fmt.Errorf("disconnect-grace 不能小于 1 秒")
+	}
+	if cfg.confirmationTimeout < 5*time.Second {
+		return config{}, fmt.Errorf("confirmation-timeout 不能小于 5 秒")
 	}
 	return cfg, nil
 }
@@ -171,14 +261,10 @@ func buildInviteURL(publicURL, advertiseHost, port, roomCode string) (string, er
 	if base == "" {
 		base = "http://" + net.JoinHostPort(advertiseHost, port)
 	}
-	if strings.Contains(base, "{code}") {
-		base = strings.ReplaceAll(base, "{code}", roomCode)
-		parsed, err := url.Parse(base)
-		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-			return "", fmt.Errorf("public-url 不是有效地址: %q", base)
-		}
-		return parsed.String(), nil
-	}
+
+	hasCodePlaceholder := strings.Contains(base, "{code}")
+	base = strings.ReplaceAll(base, "{code}", roomCode)
+	base = strings.ReplaceAll(base, "{port}", port)
 	if !strings.Contains(base, "://") {
 		base = "http://" + base
 	}
@@ -187,10 +273,20 @@ func buildInviteURL(publicURL, advertiseHost, port, roomCode string) (string, er
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return "", fmt.Errorf("public-url 不是有效地址: %q", base)
 	}
-	parsed.Path = strings.TrimRight(parsed.Path, "/") + "/room/" + roomCode
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
+	if !hasCodePlaceholder {
+		parsed.Path = strings.TrimRight(parsed.Path, "/") + "/room/" + roomCode
+		parsed.RawQuery = ""
+		parsed.Fragment = ""
+	}
 	return parsed.String(), nil
+}
+
+func urlOrigin(value string) (string, error) {
+	parsed, err := url.Parse(strings.ReplaceAll(value, "{game}", "who-drinks"))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", fmt.Errorf("无效 URL: %q", value)
+	}
+	return parsed.Scheme + "://" + parsed.Host, nil
 }
 
 func discoverLANHost() string {
@@ -303,6 +399,18 @@ func envOr(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func envBool(key string, fallback bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func envDuration(key string, fallback time.Duration) time.Duration {

@@ -14,6 +14,15 @@ export default defineConfig({
       globals: { process: true, Buffer: true, global: true },
     }),
   ],
+  server: {
+    host: true,
+    port: 5173,
+    strictPort: true,
+    allowedHosts: ['.local'],
+  },
+  preview: {
+    allowedHosts: ['.local'],
+  },
   resolve: {
     alias: {
       '@games/shared': resolve(__dirname, 'packages/shared/src'),

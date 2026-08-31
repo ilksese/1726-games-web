@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/ilksese/1726-games-web/packages/server/internal/room"
@@ -18,12 +21,19 @@ const sessionCookieName = "games_room_session"
 //go:embed static/index.html static/assets/*
 var staticFiles embed.FS
 
+type InviteInfo struct {
+	PrimaryURL string `json:"primary"`
+	IPURL      string `json:"ip,omitempty"`
+	MDNSURL    string `json:"mdns,omitempty"`
+}
+
 type Handler struct {
-	room       *room.Room
-	inviteURL  string
-	indexHTML  []byte
-	qrCodePNG  []byte
-	assetFiles http.Handler
+	room           *room.Room
+	invites        InviteInfo
+	indexHTML      []byte
+	qrCodePNG      []byte
+	assetFiles     http.Handler
+	allowedOrigins map[string]struct{}
 }
 
 type joinRequest struct {
@@ -34,22 +44,28 @@ type confirmRequest struct {
 	Agree bool `json:"agree"`
 }
 
+type selectGameRequest struct {
+	GameID string `json:"gameId"`
+}
+
 type stateResponse struct {
 	State     room.Snapshot `json:"state"`
 	InviteURL string        `json:"inviteUrl"`
+	Invites   InviteInfo    `json:"invites"`
 }
 
 type joinResponse struct {
 	PlayerID  string        `json:"playerId"`
 	State     room.Snapshot `json:"state"`
 	InviteURL string        `json:"inviteUrl"`
+	Invites   InviteInfo    `json:"invites"`
 }
 
 type errorResponse struct {
 	Error *room.ActionError `json:"error"`
 }
 
-func New(gameRoom *room.Room, inviteURL string) (http.Handler, error) {
+func New(gameRoom *room.Room, invites InviteInfo, allowedOrigins []string) (http.Handler, error) {
 	indexHTML, err := staticFiles.ReadFile("static/index.html")
 	if err != nil {
 		return nil, fmt.Errorf("读取房间页面: %w", err)
@@ -60,17 +76,30 @@ func New(gameRoom *room.Room, inviteURL string) (http.Handler, error) {
 		return nil, fmt.Errorf("读取静态资源: %w", err)
 	}
 
-	qrCodePNG, err := qrcode.Encode(inviteURL, qrcode.Medium, 320)
+	qrCodePNG, err := qrcode.Encode(invites.PrimaryURL, qrcode.Medium, 320)
 	if err != nil {
 		return nil, fmt.Errorf("生成邀请二维码: %w", err)
 	}
 
+	origins := make(map[string]struct{}, len(allowedOrigins)+1)
+	for _, origin := range allowedOrigins {
+		if normalized := normalizeOrigin(origin); normalized != "" {
+			origins[normalized] = struct{}{}
+		}
+	}
+	for _, inviteURL := range []string{invites.PrimaryURL, invites.IPURL, invites.MDNSURL} {
+		if inviteOrigin := originOf(inviteURL); inviteOrigin != "" {
+			origins[inviteOrigin] = struct{}{}
+		}
+	}
+
 	h := &Handler{
-		room:       gameRoom,
-		inviteURL:  inviteURL,
-		indexHTML:  indexHTML,
-		qrCodePNG:  qrCodePNG,
-		assetFiles: http.FileServer(http.FS(assets)),
+		room:           gameRoom,
+		invites:        invites,
+		indexHTML:      indexHTML,
+		qrCodePNG:      qrCodePNG,
+		assetFiles:     http.FileServer(http.FS(assets)),
+		allowedOrigins: origins,
 	}
 
 	mux := http.NewServeMux()
@@ -78,9 +107,15 @@ func New(gameRoom *room.Room, inviteURL string) (http.Handler, error) {
 	mux.HandleFunc("GET /room/{code}", h.serveRoom)
 	mux.Handle("GET /assets/", http.StripPrefix("/assets/", h.assetFiles))
 	mux.HandleFunc("GET /api/rooms/{code}", h.getState)
+	mux.HandleFunc("GET /api/rooms/{code}/game", h.getGame)
 	mux.HandleFunc("POST /api/rooms/{code}/join", h.join)
+	mux.HandleFunc("POST /api/rooms/{code}/config", h.setConfig)
 	mux.HandleFunc("POST /api/rooms/{code}/start", h.start)
+	mux.HandleFunc("POST /api/rooms/{code}/cancel-start", h.cancelStart)
 	mux.HandleFunc("POST /api/rooms/{code}/confirm", h.confirm)
+	mux.HandleFunc("POST /api/rooms/{code}/select-game", h.selectGame)
+	mux.HandleFunc("POST /api/rooms/{code}/game/action", h.gameAction)
+	mux.HandleFunc("POST /api/rooms/{code}/reopen", h.reopen)
 	mux.HandleFunc("POST /api/rooms/{code}/leave", h.leave)
 	mux.HandleFunc("GET /api/rooms/{code}/events", h.events)
 	mux.HandleFunc("GET /api/rooms/{code}/qr", h.qrCode)
@@ -89,7 +124,7 @@ func New(gameRoom *room.Room, inviteURL string) (http.Handler, error) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	return securityHeaders(mux), nil
+	return securityHeaders(h.withCORS(mux)), nil
 }
 
 func (h *Handler) redirectToRoom(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +144,24 @@ func (h *Handler) getState(w http.ResponseWriter, r *http.Request) {
 	if !h.ensureRoom(w, r) {
 		return
 	}
-	writeJSON(w, http.StatusOK, stateResponse{State: h.room.State(), InviteURL: h.inviteURL})
+	writeJSON(w, http.StatusOK, h.stateResponse())
+}
+
+func (h *Handler) getGame(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureRoom(w, r) {
+		return
+	}
+	playerID, err := h.room.CurrentPlayerID(h.sessionToken(r))
+	if err != nil {
+		writeActionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, joinResponse{
+		PlayerID:  playerID,
+		State:     h.room.State(),
+		InviteURL: h.invites.PrimaryURL,
+		Invites:   h.invites,
+	})
 }
 
 func (h *Handler) join(w http.ResponseWriter, r *http.Request) {
@@ -140,8 +192,26 @@ func (h *Handler) join(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, joinResponse{
 		PlayerID:  session.PlayerID,
 		State:     state,
-		InviteURL: h.inviteURL,
+		InviteURL: h.invites.PrimaryURL,
+		Invites:   h.invites,
 	})
+}
+
+func (h *Handler) setConfig(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureRoom(w, r) {
+		return
+	}
+	var config room.WhoDrinksConfig
+	if err := decodeJSON(w, r, &config); err != nil {
+		writeActionError(w, err)
+		return
+	}
+	state, err := h.room.SetConfig(h.sessionToken(r), config)
+	if err != nil {
+		writeActionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stateResponse{State: state, InviteURL: h.invites.PrimaryURL, Invites: h.invites})
 }
 
 func (h *Handler) start(w http.ResponseWriter, r *http.Request) {
@@ -153,7 +223,19 @@ func (h *Handler) start(w http.ResponseWriter, r *http.Request) {
 		writeActionError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, stateResponse{State: state, InviteURL: h.inviteURL})
+	writeJSON(w, http.StatusOK, stateResponse{State: state, InviteURL: h.invites.PrimaryURL, Invites: h.invites})
+}
+
+func (h *Handler) cancelStart(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureRoom(w, r) {
+		return
+	}
+	state, err := h.room.CancelStart(h.sessionToken(r))
+	if err != nil {
+		writeActionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stateResponse{State: state, InviteURL: h.invites.PrimaryURL, Invites: h.invites})
 }
 
 func (h *Handler) confirm(w http.ResponseWriter, r *http.Request) {
@@ -172,7 +254,55 @@ func (h *Handler) confirm(w http.ResponseWriter, r *http.Request) {
 		writeActionError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, stateResponse{State: state, InviteURL: h.inviteURL})
+	writeJSON(w, http.StatusOK, stateResponse{State: state, InviteURL: h.invites.PrimaryURL, Invites: h.invites})
+}
+
+func (h *Handler) selectGame(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureRoom(w, r) {
+		return
+	}
+
+	var request selectGameRequest
+	if err := decodeJSON(w, r, &request); err != nil {
+		writeActionError(w, err)
+		return
+	}
+	state, err := h.room.SelectGame(h.sessionToken(r), request.GameID)
+	if err != nil {
+		writeActionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stateResponse{State: state, InviteURL: h.invites.PrimaryURL, Invites: h.invites})
+}
+
+func (h *Handler) gameAction(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureRoom(w, r) {
+		return
+	}
+
+	var action room.GameAction
+	if err := decodeJSON(w, r, &action); err != nil {
+		writeActionError(w, err)
+		return
+	}
+	state, err := h.room.ApplyGameAction(h.sessionToken(r), action)
+	if err != nil {
+		writeActionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stateResponse{State: state, InviteURL: h.invites.PrimaryURL, Invites: h.invites})
+}
+
+func (h *Handler) reopen(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureRoom(w, r) {
+		return
+	}
+	state, err := h.room.Reopen(h.sessionToken(r))
+	if err != nil {
+		writeActionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stateResponse{State: state, InviteURL: h.invites.PrimaryURL, Invites: h.invites})
 }
 
 func (h *Handler) leave(w http.ResponseWriter, r *http.Request) {
@@ -193,7 +323,7 @@ func (h *Handler) leave(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1,
 	})
-	writeJSON(w, http.StatusOK, stateResponse{State: state, InviteURL: h.inviteURL})
+	writeJSON(w, http.StatusOK, stateResponse{State: state, InviteURL: h.invites.PrimaryURL, Invites: h.invites})
 }
 
 func (h *Handler) events(w http.ResponseWriter, r *http.Request) {
@@ -261,7 +391,12 @@ func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
 		"status":   "ok",
 		"roomCode": state.Code,
 		"phase":    state.Phase,
+		"mdnsUrl":  h.invites.MDNSURL,
 	})
+}
+
+func (h *Handler) stateResponse() stateResponse {
+	return stateResponse{State: h.room.State(), InviteURL: h.invites.PrimaryURL, Invites: h.invites}
 }
 
 func (h *Handler) matchesRoom(r *http.Request) bool {
@@ -291,6 +426,9 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
 	if err := decoder.Decode(target); err != nil {
 		return actionError("INVALID_REQUEST", "请求内容格式错误")
 	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return actionError("INVALID_REQUEST", "请求内容只能包含一个 JSON 对象")
+	}
 	return nil
 }
 
@@ -302,7 +440,7 @@ func writeActionError(w http.ResponseWriter, err error) {
 
 	status := http.StatusConflict
 	switch actionErr.Code {
-	case "INVALID_NAME", "INVALID_REQUEST":
+	case "INVALID_NAME", "INVALID_REQUEST", "INVALID_GAME_CONFIG", "INVALID_CARD", "UNKNOWN_GAME_ACTION":
 		status = http.StatusBadRequest
 	case "UNAUTHORIZED":
 		status = http.StatusUnauthorized
@@ -324,6 +462,61 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 func actionError(code, message string) *room.ActionError {
 	return &room.ActionError{Code: code, Message: message}
+}
+
+func normalizeOrigin(value string) string {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	return parsed.Scheme + "://" + parsed.Host
+}
+
+func originOf(value string) string {
+	return normalizeOrigin(value)
+}
+
+func (h *Handler) withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		origin := strings.TrimSpace(r.Header.Get("Origin"))
+		if origin != "" {
+			normalized := normalizeOrigin(origin)
+			_, explicitlyAllowed := h.allowedOrigins[normalized]
+			if normalized != requestOrigin(r) && !explicitlyAllowed {
+				writeJSON(w, http.StatusForbidden, errorResponse{Error: actionError("ORIGIN_NOT_ALLOWED", "当前来源不允许访问房间服务")})
+				return
+			}
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Allow-Headers", "content-type")
+			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+			w.Header().Add("Vary", "Origin")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+		} else if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func requestOrigin(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); forwarded == "http" || forwarded == "https" {
+		scheme = forwarded
+	}
+	return scheme + "://" + r.Host
 }
 
 func securityHeaders(next http.Handler) http.Handler {

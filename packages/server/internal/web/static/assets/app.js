@@ -6,6 +6,10 @@ const elements = {
   connectionBadge: document.querySelector("#connectionBadge"),
   connectionText: document.querySelector("#connectionText"),
   inviteRoomCode: document.querySelector("#inviteRoomCode"),
+  inviteLink: document.querySelector("#inviteLink"),
+  inviteAddresses: document.querySelector("#inviteAddresses"),
+  mdnsLink: document.querySelector("#mdnsLink"),
+  ipLink: document.querySelector("#ipLink"),
   fatalView: document.querySelector("#fatalView"),
   fatalMessage: document.querySelector("#fatalMessage"),
   joinView: document.querySelector("#joinView"),
@@ -15,20 +19,32 @@ const elements = {
   joinError: document.querySelector("#joinError"),
   roomView: document.querySelector("#roomView"),
   qrImage: document.querySelector("#qrImage"),
-  inviteLink: document.querySelector("#inviteLink"),
   copyButton: document.querySelector("#copyButton"),
   shareButton: document.querySelector("#shareButton"),
   playerCount: document.querySelector("#playerCount"),
   playerList: document.querySelector("#playerList"),
+  configPanel: document.querySelector("#configPanel"),
+  configForm: document.querySelector("#configForm"),
+  configTotal: document.querySelector("#configTotal"),
+  configDrinks: document.querySelector("#configDrinks"),
+  configSaveButton: document.querySelector("#configSaveButton"),
+  configHint: document.querySelector("#configHint"),
   renameForm: document.querySelector("#renameForm"),
   renameInput: document.querySelector("#renameInput"),
   startHint: document.querySelector("#startHint"),
   startButton: document.querySelector("#startButton"),
   leaveButton: document.querySelector("#leaveButton"),
+  gameSelectView: document.querySelector("#gameSelectView"),
+  whoDrinksOption: document.querySelector("#whoDrinksOption"),
+  gameSelectHint: document.querySelector("#gameSelectHint"),
+  cancelStartButton: document.querySelector("#cancelStartButton"),
   startedView: document.querySelector("#startedView"),
   startedMessage: document.querySelector("#startedMessage"),
   startedPlayers: document.querySelector("#startedPlayers"),
   enterGameButton: document.querySelector("#enterGameButton"),
+  finishedView: document.querySelector("#finishedView"),
+  finishedMessage: document.querySelector("#finishedMessage"),
+  reopenButton: document.querySelector("#reopenButton"),
   confirmDialog: document.querySelector("#confirmDialog"),
   confirmProgressText: document.querySelector("#confirmProgressText"),
   confirmProgressBar: document.querySelector("#confirmProgressBar"),
@@ -42,6 +58,7 @@ const elements = {
 let currentPlayerID = ""
 let currentState = null
 let inviteURL = window.location.href.split(/[?#]/)[0]
+let inviteLinks = { primary: inviteURL, ip: "", mdns: "" }
 let eventSource = null
 let streamErrorCount = 0
 let recoveringSession = false
@@ -64,6 +81,19 @@ function bindEvents() {
     await join(elements.joinName.value)
   })
 
+  elements.configForm.addEventListener("submit", async (event) => {
+    event.preventDefault()
+    const total = Number(elements.configTotal.value)
+    const drinks = Number(elements.configDrinks.value)
+    try {
+      const data = await api("config", { total, drinks })
+      applyState(data.state)
+      showToast("游戏配置已保存")
+    } catch (error) {
+      showToast(error.message, true)
+    }
+  })
+
   elements.renameForm.addEventListener("submit", async (event) => {
     event.preventDefault()
     const name = elements.renameInput.value.trim()
@@ -71,6 +101,7 @@ function bindEvents() {
     try {
       const data = await api("join", { name })
       rememberPlayer(data.playerId, name)
+      setInviteInfo(data)
       applyState(data.state)
       showToast("昵称已更新")
     } catch (error) {
@@ -112,6 +143,30 @@ function bindEvents() {
     }
   })
 
+  elements.cancelStartButton.addEventListener("click", async () => {
+    setButtonBusy(elements.cancelStartButton, true, "取消中…")
+    try {
+      const data = await api("cancel-start")
+      applyState(data.state)
+    } catch (error) {
+      showToast(error.message, true)
+    } finally {
+      setButtonBusy(elements.cancelStartButton, false)
+    }
+  })
+
+  elements.whoDrinksOption.addEventListener("click", async () => {
+    setButtonBusy(elements.whoDrinksOption, true, "准备游戏…")
+    try {
+      const data = await api("select-game", { gameId: "who-drinks" })
+      applyState(data.state)
+    } catch (error) {
+      showToast(error.message, true)
+    } finally {
+      setButtonBusy(elements.whoDrinksOption, false)
+    }
+  })
+
   elements.agreeButton.addEventListener("click", () => respondToConfirmation(true))
   elements.declineButton.addEventListener("click", () => respondToConfirmation(false))
 
@@ -134,6 +189,17 @@ function bindEvents() {
   })
 
   elements.enterGameButton.addEventListener("click", enterConfiguredGame)
+  elements.reopenButton.addEventListener("click", async () => {
+    setButtonBusy(elements.reopenButton, true, "重新开启中…")
+    try {
+      const data = await api("reopen")
+      applyState(data.state)
+    } catch (error) {
+      showToast(error.message, true)
+    } finally {
+      setButtonBusy(elements.reopenButton, false)
+    }
+  })
   elements.confirmDialog.addEventListener("cancel", (event) => event.preventDefault())
 }
 
@@ -157,7 +223,7 @@ async function bootstrap() {
 
   try {
     const data = await apiBase("")
-    setInviteURL(data.inviteUrl)
+    setInviteInfo(data)
     currentState = data.state
   } catch (error) {
     showFatal(error.message)
@@ -184,7 +250,7 @@ async function join(name, options = {}) {
   try {
     const data = await api("join", { name: cleanName })
     currentPlayerID = data.playerId
-    setInviteURL(data.inviteUrl)
+    setInviteInfo(data)
     rememberPlayer(data.playerId, cleanName)
     elements.renameInput.value = cleanName
     applyState(data.state)
@@ -192,6 +258,7 @@ async function join(name, options = {}) {
   } catch (error) {
     if (options.silent) {
       clearPlayer()
+      currentPlayerID = ""
       showJoinView()
     }
     elements.joinError.textContent = error.message
@@ -246,11 +313,20 @@ async function recoverSession() {
   try {
     const data = await api("join", { name: remembered.name })
     currentPlayerID = data.playerId
+    setInviteInfo(data)
     rememberPlayer(data.playerId, remembered.name)
-    setInviteURL(data.inviteUrl)
     applyState(data.state)
     connectEvents()
   } catch (error) {
+    if (["UNAUTHORIZED", "ROOM_LOCKED", "ROOM_FULL"].includes(error.code)) {
+      clearPlayer()
+      currentPlayerID = ""
+      showJoinView()
+      setConnection("idle", "请重新加入")
+      elements.joinError.textContent = error.message
+      recoveringSession = false
+      return
+    }
     setConnection("reconnecting", "等待服务器")
     showToast(error.message, true)
     window.setTimeout(() => {
@@ -271,6 +347,7 @@ function closeEvents() {
 
 function applyState(state) {
   if (!state) return
+  if (currentState && state.revision < currentState.revision) return
   currentState = state
   elements.heroRoomCode.textContent = state.code
   elements.inviteRoomCode.textContent = state.code
@@ -291,16 +368,16 @@ function applyState(state) {
   elements.fatalView.hidden = true
   renderPlayers(state.players)
   renderControls(state, self)
+  renderConfig(state, self)
   renderConfirmation(state, self)
+  renderGameSelect(state, self)
 
   if (state.phase === "started") {
     showStartedView(state)
+  } else if (state.phase === "finished") {
+    showFinishedView(state, self)
   } else {
-    elements.roomView.hidden = false
-    elements.startedView.hidden = true
-    redirectTarget = ""
-    if (redirectTimer) window.clearTimeout(redirectTimer)
-    redirectTimer = null
+    showRoomView(state.phase === "game-select")
   }
 }
 
@@ -359,8 +436,10 @@ function renderPlayers(players) {
 
     const confirmation = document.createElement("span")
     confirmation.className = `confirm-state${player.confirmed ? " confirm-state--yes" : ""}`
-    if (currentState?.phase === "confirming" || currentState?.phase === "started") {
+    if (currentState?.phase === "confirming" || currentState?.phase === "game-select") {
       confirmation.textContent = player.confirmed ? "已同意" : "待确认"
+    } else if (currentState?.phase === "started" || currentState?.phase === "finished") {
+      confirmation.textContent = player.confirmed ? "已准备" : "未确认"
     } else {
       confirmation.textContent = player.connected ? "已入队" : "离线"
     }
@@ -373,21 +452,54 @@ function renderPlayers(players) {
 function renderControls(state, self) {
   elements.renameInput.value = self.name
   const offlinePlayers = state.players.filter((player) => !player.connected)
-  const canStart = self.captain && state.phase === "waiting" && offlinePlayers.length === 0
+  const canStart = self.captain && state.phase === "waiting" && state.players.length >= 2 && offlinePlayers.length === 0
 
   elements.startButton.hidden = !self.captain || state.phase !== "waiting"
   elements.startButton.disabled = !canStart
 
   if (state.phase === "confirming") {
     elements.startHint.textContent = "已发起确认，等待所有玩家选择。"
+  } else if (state.phase === "game-select") {
+    elements.startHint.textContent = self.captain ? "全员已同意，请选择本局游戏。" : "全员已同意，等待队长选择游戏。"
+  } else if (state.phase === "started") {
+    elements.startHint.textContent = "游戏已开始，正在同步所有玩家。"
+  } else if (state.phase === "finished") {
+    elements.startHint.textContent = self.captain ? "本局已结束，可以重新开启房间。" : "本局已结束，等待队长重新开启房间。"
   } else if (!self.captain) {
     const captain = state.players.find((player) => player.captain)
     elements.startHint.textContent = captain ? `等待队长 ${captain.name} 发起开局确认。` : "等待系统选出队长。"
+  } else if (state.players.length < 2) {
+    elements.startHint.textContent = "至少需要 2 名玩家才能发起开局确认。"
   } else if (offlinePlayers.length > 0) {
     elements.startHint.textContent = "有玩家离线，需等待其重连或自动离开后才能开局。"
   } else {
-    elements.startHint.textContent = "你是队长。点击按钮后，全员会同时收到确认弹窗。"
+    elements.startHint.textContent = "你是队长。保存配置后，发起全员开局确认。"
   }
+}
+
+function renderConfig(state, self) {
+  const isWaiting = state.phase === "waiting"
+  const isCaptain = self.captain
+  elements.configPanel.hidden = !isWaiting
+  elements.configTotal.value = state.config?.total ?? 12
+  elements.configDrinks.value = state.config?.drinks ?? 3
+  elements.configTotal.disabled = !isCaptain
+  elements.configDrinks.disabled = !isCaptain
+  elements.configSaveButton.disabled = !isCaptain
+  elements.configHint.textContent = isCaptain ? "调整配置后，所有玩家会看到最新设置。" : "只有队长可以修改谁喝酒的配置。"
+}
+
+function renderGameSelect(state, self) {
+  const selecting = state.phase === "game-select"
+  elements.gameSelectView.hidden = !selecting
+  if (!selecting) return
+
+  const option = state.availableGames?.find((game) => game.id === "who-drinks")
+  elements.whoDrinksOption.disabled = !self.captain || !option
+  elements.gameSelectHint.textContent = self.captain
+    ? "选择后所有玩家会进入同一个谁喝酒牌局。"
+    : "等待队长选择谁喝酒。"
+  elements.cancelStartButton.hidden = !self.captain
 }
 
 function renderConfirmation(state, self) {
@@ -409,11 +521,24 @@ function renderConfirmation(state, self) {
   }
 }
 
+function showRoomView(gameSelectVisible = false) {
+  elements.joinView.hidden = true
+  elements.roomView.hidden = false
+  elements.gameSelectView.hidden = !gameSelectVisible
+  elements.startedView.hidden = true
+  elements.finishedView.hidden = true
+  redirectTarget = ""
+  if (redirectTimer) window.clearTimeout(redirectTimer)
+  redirectTimer = null
+}
+
 function showStartedView(state) {
   if (elements.confirmDialog.open) elements.confirmDialog.close()
   elements.joinView.hidden = true
   elements.roomView.hidden = true
+  elements.gameSelectView.hidden = true
   elements.startedView.hidden = false
+  elements.finishedView.hidden = true
   elements.startedPlayers.replaceChildren()
 
   for (const player of state.players) {
@@ -424,16 +549,30 @@ function showStartedView(state) {
   }
 
   if (state.gameUrl) {
-    elements.startedMessage.textContent = "所有设备已同步确认，即将进入配置的游戏地址。"
+    const gameName = state.selectedGame?.name || "游戏"
+    elements.startedMessage.textContent = `所有玩家已确认，正在进入${gameName}…`
     elements.enterGameButton.hidden = false
     if (redirectTarget !== state.gameUrl) {
       redirectTarget = state.gameUrl
-      redirectTimer = window.setTimeout(enterConfiguredGame, 1800)
+      redirectTimer = window.setTimeout(enterConfiguredGame, 1200)
     }
   } else {
-    elements.startedMessage.textContent = "所有设备已经同步进入游戏状态，局域网组队流程完成。"
+    elements.startedMessage.textContent = "游戏已开始，但暂未配置游戏前端地址。"
     elements.enterGameButton.hidden = true
   }
+}
+
+function showFinishedView(state, self) {
+  if (elements.confirmDialog.open) elements.confirmDialog.close()
+  elements.joinView.hidden = true
+  elements.roomView.hidden = false
+  elements.gameSelectView.hidden = true
+  elements.startedView.hidden = true
+  elements.finishedView.hidden = false
+  elements.finishedMessage.textContent = self.captain
+    ? "本局已经结束，你可以重新开启房间，让队伍开始下一局。"
+    : "本局已经结束，等待队长重新开启房间。"
+  elements.reopenButton.hidden = !self.captain
 }
 
 async function respondToConfirmation(agree) {
@@ -451,14 +590,41 @@ async function respondToConfirmation(agree) {
 
 function enterConfiguredGame() {
   if (!currentState?.gameUrl) return
-  window.location.assign(currentState.gameUrl)
+  window.location.assign(resolveGameURL(currentState.gameUrl))
+}
+
+function resolveGameURL(value) {
+  try {
+    const gameURL = new URL(value, window.location.href)
+    const knownHosts = new Set(
+      [inviteLinks.primary, inviteLinks.ip, inviteLinks.mdns]
+        .filter(Boolean)
+        .map((link) => new URL(link).hostname),
+    )
+    if (knownHosts.has(gameURL.hostname)) {
+      gameURL.hostname = window.location.hostname
+    }
+
+    const serverValue = gameURL.searchParams.get("server")
+    if (serverValue) {
+      const serverURL = new URL(serverValue)
+      if (knownHosts.has(serverURL.hostname)) {
+        gameURL.searchParams.set("server", window.location.origin)
+      }
+    }
+    return gameURL.toString()
+  } catch {
+    return value
+  }
 }
 
 function showJoinView() {
   if (elements.confirmDialog.open) elements.confirmDialog.close()
   elements.fatalView.hidden = true
   elements.roomView.hidden = true
+  elements.gameSelectView.hidden = true
   elements.startedView.hidden = true
+  elements.finishedView.hidden = true
   elements.joinView.hidden = false
   window.setTimeout(() => elements.joinName.focus(), 0)
 }
@@ -467,15 +633,41 @@ function showFatal(message) {
   closeEvents()
   elements.joinView.hidden = true
   elements.roomView.hidden = true
+  elements.gameSelectView.hidden = true
   elements.startedView.hidden = true
+  elements.finishedView.hidden = true
   elements.fatalView.hidden = false
   elements.fatalMessage.textContent = message
   setConnection("reconnecting", "连接失败")
 }
 
-function setInviteURL(url) {
-  if (url) inviteURL = url
+function setInviteInfo(data) {
+  if (!data) return
+  if (data.invites) {
+    inviteLinks = {
+      primary: data.invites.primary || data.inviteUrl || inviteURL,
+      ip: data.invites.ip || "",
+      mdns: data.invites.mdns || "",
+    }
+  } else if (data.inviteUrl) {
+    inviteLinks.primary = data.inviteUrl
+  }
+  inviteURL = data.inviteUrl || inviteLinks.primary || inviteURL
   elements.inviteLink.value = inviteURL
+  renderAddressLink(elements.mdnsLink, inviteLinks.mdns, "mDNS 地址")
+  renderAddressLink(elements.ipLink, inviteLinks.ip, "IP 备用地址")
+  elements.inviteAddresses.hidden = !inviteLinks.mdns && !inviteLinks.ip
+}
+
+function renderAddressLink(element, value, label) {
+  if (!value) {
+    element.hidden = true
+    element.removeAttribute("href")
+    return
+  }
+  element.hidden = false
+  element.href = value
+  element.textContent = `${label}：${value.replace(/^https?:\/\//, "")}`
 }
 
 function setConnection(kind, text) {
@@ -525,15 +717,18 @@ async function apiBase(suffix, body) {
 
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(data.error?.message || `请求失败（${response.status}）`)
+    const error = new Error(data.error?.message || `请求失败（${response.status}）`)
+    error.code = data.error?.code || ""
+    throw error
   }
   return data
 }
 
 function setButtonBusy(button, busy, text = "") {
-  if (!button.dataset.label) button.dataset.label = button.textContent
+  if (!button.dataset.content) button.dataset.content = button.innerHTML
   button.disabled = busy
-  button.textContent = busy ? text : button.dataset.label
+  if (busy) button.textContent = text
+  else button.innerHTML = button.dataset.content
 }
 
 async function copyText(text) {

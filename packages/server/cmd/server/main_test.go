@@ -34,6 +34,13 @@ func TestBuildInviteURL(t *testing.T) {
 			code:      "654321",
 			want:      "https://games.example.test/invite/654321",
 		},
+		{
+			name:      "port placeholder with generated room path",
+			publicURL: "games.example.test:{port}",
+			port:      "5180",
+			code:      "654321",
+			want:      "http://games.example.test:5180/room/654321",
+		},
 	}
 
 	for _, test := range tests {

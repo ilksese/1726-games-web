@@ -1,22 +1,9 @@
 import { useLayoutEffect, useEffect, useMemo, useRef, useState } from 'react'
 import { atom, useAtom, useAtomValue } from 'jotai'
 import { getGame, recordPlay } from '@games/shared'
+import RemoteWhoDrinks, { getRemoteRoomParams } from './RemoteWhoDrinks'
+import { COPY_POOL } from "./visuals"
 import './style.css'
-
-const COPY_POOL = [
-  '这杯酒，敬你的好运！',
-  '酒是粮食精，越喝越年轻～',
-  '是时候展示真正的酒量了！',
-  '推杯换盏，友谊长存！',
-  '一杯下肚，烦恼全无！',
-  '这一杯，躲是躲不掉的～',
-  '酒杯一响，黄金万两！',
-  '干了这杯，好运翻倍！',
-  '酒逢知己千杯少，先干为敬！',
-  '好手气！这杯请你笑纳～',
-  '感情深，一口闷，敬伯乐！',
-  '酒樽不空，情谊不散！',
-]
 
 const cfgAtom = atom({ total: 12, drinks: 3 })
 
@@ -360,6 +347,14 @@ function Game({ onReset }: { onReset: () => void }) {
 }
 
 export default function WhoDrinks() {
+  const remoteRoom = getRemoteRoomParams()
+  if (remoteRoom) {
+    return <RemoteWhoDrinks {...remoteRoom} />
+  }
+  return <LocalWhoDrinks />
+}
+
+function LocalWhoDrinks() {
   const [cfg, setCfg] = useAtom(cfgAtom)
   const [screen, setScreen] = useState<'setup' | 'game'>('setup')
 
