@@ -68,22 +68,23 @@ func TestRoomPageAndQRCode(t *testing.T) {
 func TestOnlyCaptainCanStartThroughHTTP(t *testing.T) {
 	gameRoom, handler := testHandler(t)
 
-	captainCookie := joinPlayer(t, handler, "甲")
-	memberCookie := joinPlayer(t, handler, "乙")
+	captain := joinPlayer(t, handler, "甲")
+	member := joinPlayer(t, handler, "乙")
 
-	_, cancelCaptain, err := gameRoom.Subscribe(captainCookie.Value)
+	_, cancelCaptain, err := gameRoom.Subscribe(captain.Name, captain.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cancelCaptain()
-	_, cancelMember, err := gameRoom.Subscribe(memberCookie.Value)
+	_, cancelMember, err := gameRoom.Subscribe(member.Name, member.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cancelMember()
 
 	request := httptest.NewRequest(http.MethodPost, "/api/rooms/123456/start", nil)
-	request.AddCookie(memberCookie)
+	request.Header.Set("X-Player-Name", member.Name)
+	request.Header.Set("X-Player-Key", member.Key)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden {
@@ -91,7 +92,8 @@ func TestOnlyCaptainCanStartThroughHTTP(t *testing.T) {
 	}
 
 	request = httptest.NewRequest(http.MethodPost, "/api/rooms/123456/start", nil)
-	request.AddCookie(captainCookie)
+	request.Header.Set("X-Player-Name", captain.Name)
+	request.Header.Set("X-Player-Key", captain.Key)
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
@@ -101,21 +103,21 @@ func TestOnlyCaptainCanStartThroughHTTP(t *testing.T) {
 
 func TestFullGameFlowThroughHTTP(t *testing.T) {
 	gameRoom, handler := testHandler(t)
-	captainCookie := joinPlayer(t, handler, "队长")
-	memberCookie := joinPlayer(t, handler, "队员")
+	captain := joinPlayer(t, handler, "队长")
+	member := joinPlayer(t, handler, "队员")
 
-	_, cancelCaptain, err := gameRoom.Subscribe(captainCookie.Value)
+	_, cancelCaptain, err := gameRoom.Subscribe(captain.Name, captain.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cancelCaptain()
-	_, cancelMember, err := gameRoom.Subscribe(memberCookie.Value)
+	_, cancelMember, err := gameRoom.Subscribe(member.Name, member.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cancelMember()
 
-	response := postJSON(t, handler, "/api/rooms/123456/config", captainCookie, map[string]any{
+	response := postJSON(t, handler, "/api/rooms/123456/config", captain, map[string]any{
 		"total":  6,
 		"drinks": 2,
 	})
@@ -123,15 +125,15 @@ func TestFullGameFlowThroughHTTP(t *testing.T) {
 		t.Fatalf("config status = %d: %s", response.Code, response.Body.String())
 	}
 
-	response = postJSON(t, handler, "/api/rooms/123456/start", captainCookie, nil)
+	response = postJSON(t, handler, "/api/rooms/123456/start", captain, nil)
 	if response.Code != http.StatusOK {
 		t.Fatalf("start status = %d: %s", response.Code, response.Body.String())
 	}
-	response = postJSON(t, handler, "/api/rooms/123456/confirm", captainCookie, map[string]bool{"agree": true})
+	response = postJSON(t, handler, "/api/rooms/123456/confirm", captain, map[string]bool{"agree": true})
 	if response.Code != http.StatusOK {
 		t.Fatalf("captain confirm status = %d: %s", response.Code, response.Body.String())
 	}
-	response = postJSON(t, handler, "/api/rooms/123456/confirm", memberCookie, map[string]bool{"agree": true})
+	response = postJSON(t, handler, "/api/rooms/123456/confirm", member, map[string]bool{"agree": true})
 	if response.Code != http.StatusOK {
 		t.Fatalf("member confirm status = %d: %s", response.Code, response.Body.String())
 	}
@@ -141,11 +143,11 @@ func TestFullGameFlowThroughHTTP(t *testing.T) {
 		t.Fatalf("phase after confirmation = %s, want %s", selection.State.Phase, room.PhaseGameSelect)
 	}
 
-	response = postJSON(t, handler, "/api/rooms/123456/select-game", memberCookie, map[string]string{"gameId": room.GameWhoDrinks})
+	response = postJSON(t, handler, "/api/rooms/123456/select-game", member, map[string]string{"gameId": room.GameWhoDrinks})
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("member select status = %d, want 403", response.Code)
 	}
-	response = postJSON(t, handler, "/api/rooms/123456/select-game", captainCookie, map[string]string{"gameId": room.GameWhoDrinks})
+	response = postJSON(t, handler, "/api/rooms/123456/select-game", captain, map[string]string{"gameId": room.GameWhoDrinks})
 	if response.Code != http.StatusOK {
 		t.Fatalf("captain select status = %d: %s", response.Code, response.Body.String())
 	}
@@ -157,7 +159,8 @@ func TestFullGameFlowThroughHTTP(t *testing.T) {
 
 	gameRequest := httptest.NewRequest(http.MethodGet, "/api/rooms/123456/game", nil)
 	gameRequest.Header.Set("Origin", "http://127.0.0.1:5173")
-	gameRequest.AddCookie(memberCookie)
+	gameRequest.Header.Set("X-Player-Name", member.Name)
+	gameRequest.Header.Set("X-Player-Key", member.Key)
 	gameResponse := httptest.NewRecorder()
 	handler.ServeHTTP(gameResponse, gameRequest)
 	if gameResponse.Code != http.StatusOK {
@@ -165,11 +168,11 @@ func TestFullGameFlowThroughHTTP(t *testing.T) {
 	}
 	var gameSession joinResponse
 	decodeResponse(t, gameResponse, &gameSession)
-	if gameSession.PlayerID == "" || gameSession.State.Phase != room.PhaseStarted {
+	if gameSession.Name != "队员" || gameSession.State.Phase != room.PhaseStarted {
 		t.Fatalf("unexpected game session: %+v", gameSession)
 	}
 
-	response = postJSON(t, handler, "/api/rooms/123456/game/action", memberCookie, room.GameAction{Type: "flip", Index: 0})
+	response = postJSON(t, handler, "/api/rooms/123456/game/action", member, room.GameAction{Type: "flip", Index: 0})
 	if response.Code != http.StatusOK {
 		t.Fatalf("flip status = %d: %s", response.Code, response.Body.String())
 	}
@@ -184,12 +187,12 @@ func TestGameOriginCORS(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("state status = %d: %s", response.Code, response.Body.String())
 	}
-	if response.Header().Get("Access-Control-Allow-Origin") != "http://127.0.0.1:5173" || response.Header().Get("Access-Control-Allow-Credentials") != "true" {
+	if response.Header().Get("Access-Control-Allow-Origin") != "http://127.0.0.1:5173" {
 		t.Fatalf("missing CORS headers: %#v", response.Header())
 	}
 }
 
-func joinPlayer(t *testing.T, handler http.Handler, name string) *http.Cookie {
+func joinPlayer(t *testing.T, handler http.Handler, name string) room.Session {
 	t.Helper()
 	body, _ := json.Marshal(map[string]string{"name": name})
 	request := httptest.NewRequest(http.MethodPost, "/api/rooms/123456/join", bytes.NewReader(body))
@@ -197,17 +200,17 @@ func joinPlayer(t *testing.T, handler http.Handler, name string) *http.Cookie {
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
-		payload, _ := io.ReadAll(response.Body)
-		t.Fatalf("join status = %d: %s", response.Code, payload)
+		t.Fatalf("join status = %d: %s", response.Code, response.Body.String())
 	}
-	cookies := response.Result().Cookies()
-	if len(cookies) == 0 {
-		t.Fatal("join response did not set a session cookie")
+	var joined joinResponse
+	decodeResponse(t, response, &joined)
+	if joined.Name == "" || joined.Key == "" {
+		t.Fatalf("join response missing identity: %+v", joined)
 	}
-	return cookies[0]
+	return room.Session{Name: joined.Name, Key: joined.Key}
 }
 
-func postJSON(t *testing.T, handler http.Handler, path string, cookie *http.Cookie, body any) *httptest.ResponseRecorder {
+func postJSON(t *testing.T, handler http.Handler, path string, player room.Session, body any) *httptest.ResponseRecorder {
 	t.Helper()
 	var payload io.Reader
 	if body != nil {
@@ -219,7 +222,8 @@ func postJSON(t *testing.T, handler http.Handler, path string, cookie *http.Cook
 	}
 	request := httptest.NewRequest(http.MethodPost, path, payload)
 	request.Header.Set("Content-Type", "application/json")
-	request.AddCookie(cookie)
+	request.Header.Set("X-Player-Name", player.Name)
+	request.Header.Set("X-Player-Key", player.Key)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	return response

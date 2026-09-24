@@ -1,5 +1,5 @@
 const roomCode = parseRoomCode()
-const storageKey = roomCode ? `@games/server/player/${roomCode}` : ""
+const storageKey = roomCode ? `@games/server/name/${roomCode}` : ""
 
 const elements = {
   heroRoomCode: document.querySelector("#heroRoomCode"),
@@ -29,7 +29,6 @@ const elements = {
   configDrinks: document.querySelector("#configDrinks"),
   configSaveButton: document.querySelector("#configSaveButton"),
   configHint: document.querySelector("#configHint"),
-  renameForm: document.querySelector("#renameForm"),
   renameInput: document.querySelector("#renameInput"),
   startHint: document.querySelector("#startHint"),
   startButton: document.querySelector("#startButton"),
@@ -55,7 +54,8 @@ const elements = {
   toast: document.querySelector("#toast"),
 }
 
-let currentPlayerID = ""
+let currentPlayerName = ""
+let currentPlayerKey = ""
 let currentState = null
 let inviteURL = window.location.href.split(/[?#]/)[0]
 let inviteLinks = { primary: inviteURL, ip: "", mdns: "" }
@@ -89,21 +89,6 @@ function bindEvents() {
       const data = await api("config", { total, drinks })
       applyState(data.state)
       showToast("游戏配置已保存")
-    } catch (error) {
-      showToast(error.message, true)
-    }
-  })
-
-  elements.renameForm.addEventListener("submit", async (event) => {
-    event.preventDefault()
-    const name = elements.renameInput.value.trim()
-    if (!name) return
-    try {
-      const data = await api("join", { name })
-      rememberPlayer(data.playerId, name)
-      setInviteInfo(data)
-      applyState(data.state)
-      showToast("昵称已更新")
     } catch (error) {
       showToast(error.message, true)
     }
@@ -175,15 +160,16 @@ function bindEvents() {
     try {
       await api("leave")
     } catch (error) {
-      if (!String(error.message).includes("会话")) {
+      if (error.code !== "UNAUTHORIZED") {
         showToast(error.message, true)
         return
       }
     }
-    clearPlayer()
+    clearSeat()
     closeEvents()
     currentState = null
-    currentPlayerID = ""
+    currentPlayerName = ""
+    currentPlayerKey = ""
     showJoinView()
     setConnection("idle", "尚未加入")
   })
@@ -215,10 +201,10 @@ async function bootstrap() {
   elements.joinView.hidden = false
   setConnection("idle", "读取房间")
 
-  const remembered = readPlayer()
-  if (remembered?.name) {
+  const remembered = readSeat()
+  if (remembered.name) {
     elements.joinName.value = remembered.name
-    elements.renameInput.value = remembered.name
+    elements.renameInput.textContent = remembered.name
   }
 
   try {
@@ -230,8 +216,8 @@ async function bootstrap() {
     return
   }
 
-  if (remembered?.playerId && remembered?.name) {
-    await join(remembered.name, { silent: true })
+  if (remembered.name && remembered.key) {
+    await join(remembered.name, { silent: true, key: remembered.key })
   } else {
     showJoinView()
     setConnection("idle", "等待加入")
@@ -248,17 +234,19 @@ async function join(name, options = {}) {
 
   setButtonBusy(elements.joinButton, true, "加入中…")
   try {
-    const data = await api("join", { name: cleanName })
-    currentPlayerID = data.playerId
+    const data = await api("join", { name: cleanName, key: options.key || "" })
+    currentPlayerName = data.name
+    currentPlayerKey = data.key
     setInviteInfo(data)
-    rememberPlayer(data.playerId, cleanName)
-    elements.renameInput.value = cleanName
+    rememberSeat(data.name, data.key)
+    elements.renameInput.textContent = data.name
     applyState(data.state)
     connectEvents()
   } catch (error) {
     if (options.silent) {
-      clearPlayer()
-      currentPlayerID = ""
+      clearSeat()
+      currentPlayerName = ""
+      currentPlayerKey = ""
       showJoinView()
     }
     elements.joinError.textContent = error.message
@@ -271,7 +259,10 @@ async function join(name, options = {}) {
 function connectEvents() {
   closeEvents()
   setConnection("reconnecting", "连接房间")
-  eventSource = new EventSource(`/api/rooms/${encodeURIComponent(roomCode)}/events`)
+  const eventsURL = new URL(`/api/rooms/${encodeURIComponent(roomCode)}/events`, window.location.href)
+  eventsURL.searchParams.set("name", currentPlayerName)
+  eventsURL.searchParams.set("key", currentPlayerKey)
+  eventSource = new EventSource(eventsURL)
 
   eventSource.onopen = () => {
     streamErrorCount = 0
@@ -304,23 +295,25 @@ function connectEvents() {
 
 async function recoverSession() {
   if (recoveringSession) return
-  const remembered = readPlayer()
-  if (!remembered?.name) return
+  const remembered = readSeat()
+  if (!remembered.name || !remembered.key) return
 
   recoveringSession = true
   closeEvents()
   await sleep(900)
   try {
-    const data = await api("join", { name: remembered.name })
-    currentPlayerID = data.playerId
+    const data = await api("join", { name: remembered.name, key: remembered.key })
+    currentPlayerName = data.name
+    currentPlayerKey = data.key
     setInviteInfo(data)
-    rememberPlayer(data.playerId, remembered.name)
+    rememberSeat(data.name, data.key)
     applyState(data.state)
     connectEvents()
   } catch (error) {
-    if (["UNAUTHORIZED", "ROOM_LOCKED", "ROOM_FULL"].includes(error.code)) {
-      clearPlayer()
-      currentPlayerID = ""
+    if (["UNAUTHORIZED", "NAME_TAKEN", "ROOM_LOCKED", "ROOM_FULL"].includes(error.code)) {
+      clearSeat()
+      currentPlayerName = ""
+      currentPlayerKey = ""
       showJoinView()
       setConnection("idle", "请重新加入")
       elements.joinError.textContent = error.message
@@ -352,11 +345,12 @@ function applyState(state) {
   elements.heroRoomCode.textContent = state.code
   elements.inviteRoomCode.textContent = state.code
 
-  const self = state.players.find((player) => player.id === currentPlayerID)
+  const self = state.players.find((player) => player.name === currentPlayerName)
   if (!self) {
-    if (currentPlayerID) {
-      clearPlayer()
-      currentPlayerID = ""
+    if (currentPlayerName) {
+      clearSeat()
+      currentPlayerName = ""
+      currentPlayerKey = ""
       closeEvents()
       showToast("当前会话已离开房间，请重新加入", true)
     }
@@ -396,7 +390,7 @@ function renderPlayers(players) {
   for (const player of players) {
     const item = document.createElement("li")
     item.className = "player-item"
-    if (player.id === currentPlayerID) item.classList.add("player-item--self")
+    if (player.name === currentPlayerName) item.classList.add("player-item--self")
 
     const avatar = document.createElement("span")
     avatar.className = "player-avatar"
@@ -412,7 +406,7 @@ function renderPlayers(players) {
     name.textContent = player.name
     nameLine.append(name)
 
-    if (player.id === currentPlayerID) {
+    if (player.name === currentPlayerName) {
       const selfTag = document.createElement("span")
       selfTag.className = "player-tag"
       selfTag.textContent = "我"
@@ -450,7 +444,7 @@ function renderPlayers(players) {
 }
 
 function renderControls(state, self) {
-  elements.renameInput.value = self.name
+  elements.renameInput.textContent = self.name
   const offlinePlayers = state.players.filter((player) => !player.connected)
   const canStart = self.captain && state.phase === "waiting" && state.players.length >= 2 && offlinePlayers.length === 0
 
@@ -675,25 +669,28 @@ function setConnection(kind, text) {
   elements.connectionText.textContent = text
 }
 
-function rememberPlayer(playerId, name) {
-  currentPlayerID = playerId
+function rememberSeat(name, key) {
+  currentPlayerName = name
+  currentPlayerKey = key
   try {
-    localStorage.setItem(storageKey, JSON.stringify({ playerId, name }))
+    localStorage.setItem(storageKey, JSON.stringify({ name, key }))
   } catch {
-    // Private browsing can disable storage; the HttpOnly session cookie still keeps the player connected.
+    // Private browsing can disable storage. The in-memory seat still works for this page.
   }
 }
 
-function readPlayer() {
+function readSeat() {
   try {
     const value = localStorage.getItem(storageKey)
-    return value ? JSON.parse(value) : null
+    if (!value) return { name: "", key: "" }
+    if (value.startsWith("{")) return JSON.parse(value)
+    return { name: value, key: "" }
   } catch {
-    return null
+    return { name: "", key: "" }
   }
 }
 
-function clearPlayer() {
+function clearSeat() {
   try {
     localStorage.removeItem(storageKey)
   } catch {
@@ -709,10 +706,13 @@ async function api(action, body) {
 async function apiBase(suffix, body) {
   const response = await fetch(`/api/rooms/${encodeURIComponent(roomCode)}${suffix}`, {
     method: body === undefined ? (suffix ? "POST" : "GET") : "POST",
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    headers: {
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(currentPlayerName ? { "X-Player-Name": currentPlayerName } : {}),
+      ...(currentPlayerKey ? { "X-Player-Key": currentPlayerKey } : {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",
-    credentials: "same-origin",
   })
 
   const data = await response.json().catch(() => ({}))

@@ -38,8 +38,8 @@ func (e *ActionError) Error() string {
 }
 
 type Session struct {
-	PlayerID string `json:"playerId"`
-	Token    string `json:"token"`
+	Name string `json:"name"`
+	Key  string `json:"key"`
 }
 
 type PlayerView struct {
@@ -131,9 +131,8 @@ type Options struct {
 }
 
 type player struct {
-	id                   string
-	token                string
 	name                 string
+	key                  string
 	captain              bool
 	connected            bool
 	confirmed            bool
@@ -167,7 +166,6 @@ type Room struct {
 	selectedGame           *GameSelection
 	whoDrinks              *whoDrinksGame
 	players                map[string]*player
-	tokenIndex             map[string]string
 	order                  []string
 	participants           map[string]struct{}
 	subscribers            map[chan Event]struct{}
@@ -193,7 +191,6 @@ func New(code string, options Options) *Room {
 		phase:               PhaseWaiting,
 		config:              WhoDrinksConfig{Total: 12, Drinks: 3},
 		players:             make(map[string]*player),
-		tokenIndex:          make(map[string]string),
 		participants:        make(map[string]struct{}),
 		subscribers:         make(map[chan Event]struct{}),
 	}
@@ -209,14 +206,14 @@ func (r *Room) State() Snapshot {
 	return r.snapshotLocked()
 }
 
-func (r *Room) CurrentPlayerID(token string) (string, error) {
+func (r *Room) CurrentPlayer(name, key string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	p, err := r.playerByTokenLocked(token)
+	p, err := r.playerByNameLocked(name, key)
 	if err != nil {
 		return "", err
 	}
-	return p.id, nil
+	return p.name, nil
 }
 
 func (r *Room) Close() {
@@ -228,8 +225,8 @@ func (r *Room) Close() {
 	}
 }
 
-// Join creates a player session, or resumes an existing session when token is valid.
-func (r *Room) Join(name, token string) (Session, Snapshot, error) {
+// Join adds a uniquely named player. An existing name is rejected unless key matches that seat.
+func (r *Room) Join(name, key string) (Session, Snapshot, error) {
 	cleanName, err := normalizeName(name)
 	if err != nil {
 		return Session{}, Snapshot{}, err
@@ -238,19 +235,12 @@ func (r *Room) Join(name, token string) (Session, Snapshot, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if token != "" {
-		if playerID, ok := r.tokenIndex[token]; ok {
-			p := r.players[playerID]
-			if p.name != cleanName {
-				oldName := p.name
-				p.name = cleanName
-				r.revision++
-				r.broadcastLocked("player_updated", fmt.Sprintf("%s 将昵称改为 %s", oldName, cleanName))
-			}
-			return Session{PlayerID: p.id, Token: p.token}, r.snapshotLocked(), nil
+	if existing, exists := r.players[cleanName]; exists {
+		if key == "" || key != existing.key {
+			return Session{}, Snapshot{}, actionError("NAME_TAKEN", "这个名字已经在房间里，请换一个")
 		}
+		return Session{Name: existing.name, Key: existing.key}, r.snapshotLocked(), nil
 	}
-
 	if r.phase != PhaseWaiting {
 		return Session{}, Snapshot{}, actionError("ROOM_LOCKED", "房间正在确认或游戏已经开始，暂时不能加入")
 	}
@@ -258,24 +248,17 @@ func (r *Room) Join(name, token string) (Session, Snapshot, error) {
 		return Session{}, Snapshot{}, actionError("ROOM_FULL", fmt.Sprintf("房间已达到 %d 人上限", MaxRoomPlayers))
 	}
 
-	id, err := randomCredential(9)
+	seatKey, err := randomKey()
 	if err != nil {
-		return Session{}, Snapshot{}, fmt.Errorf("生成玩家标识: %w", err)
+		return Session{}, Snapshot{}, fmt.Errorf("生成玩家钥匙: %w", err)
 	}
-	token, err = randomCredential(24)
-	if err != nil {
-		return Session{}, Snapshot{}, fmt.Errorf("生成会话令牌: %w", err)
-	}
-
 	p := &player{
-		id:      "p_" + id,
-		token:   token,
 		name:    cleanName,
+		key:     seatKey,
 		captain: len(r.order) == 0,
 	}
-	r.players[p.id] = p
-	r.tokenIndex[p.token] = p.id
-	r.order = append(r.order, p.id)
+	r.players[cleanName] = p
+	r.order = append(r.order, cleanName)
 	r.revision++
 
 	message := fmt.Sprintf("%s 加入了房间", p.name)
@@ -284,14 +267,14 @@ func (r *Room) Join(name, token string) (Session, Snapshot, error) {
 	}
 	r.broadcastLocked("player_joined", message)
 
-	return Session{PlayerID: p.id, Token: p.token}, r.snapshotLocked(), nil
+	return Session{Name: cleanName, Key: seatKey}, r.snapshotLocked(), nil
 }
 
-func (r *Room) Leave(token string) (Snapshot, error) {
+func (r *Room) Leave(name, key string) (Snapshot, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	p, err := r.playerByTokenLocked(token)
+	p, err := r.playerByNameLocked(name, key)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -300,26 +283,26 @@ func (r *Room) Leave(token string) (Snapshot, error) {
 		r.cancelConfirmationLocked()
 	}
 
-	name := p.name
+	playerName := p.name
 	wasCaptain := p.captain
-	r.removePlayerLocked(p.id)
+	r.removePlayerLocked(p.name)
 	r.revision++
 
-	message := fmt.Sprintf("%s 离开了房间", name)
+	message := fmt.Sprintf("%s 离开了房间", playerName)
 	if wasCaptain {
 		if captain := r.captainLocked(); captain != nil {
-			message = fmt.Sprintf("%s 离开了房间，%s 成为新队长", name, captain.name)
+			message = fmt.Sprintf("%s 离开了房间，%s 成为新队长", playerName, captain.name)
 		}
 	}
 	r.broadcastLocked("player_left", message)
 	return r.snapshotLocked(), nil
 }
 
-func (r *Room) SetConfig(token string, config WhoDrinksConfig) (Snapshot, error) {
+func (r *Room) SetConfig(name, key string, config WhoDrinksConfig) (Snapshot, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	p, err := r.playerByTokenLocked(token)
+	p, err := r.playerByNameLocked(name, key)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -343,11 +326,11 @@ func (r *Room) SetConfig(token string, config WhoDrinksConfig) (Snapshot, error)
 	return r.snapshotLocked(), nil
 }
 
-func (r *Room) RequestStart(token string) (Snapshot, error) {
+func (r *Room) RequestStart(name, key string) (Snapshot, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	p, err := r.playerByTokenLocked(token)
+	p, err := r.playerByNameLocked(name, key)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -391,18 +374,18 @@ func (r *Room) RequestStart(token string) (Snapshot, error) {
 	return r.snapshotLocked(), nil
 }
 
-func (r *Room) Confirm(token string, agreed bool) (Snapshot, error) {
+func (r *Room) Confirm(name, key string, agreed bool) (Snapshot, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	p, err := r.playerByTokenLocked(token)
+	p, err := r.playerByNameLocked(name, key)
 	if err != nil {
 		return Snapshot{}, err
 	}
 	if r.phase != PhaseConfirming {
 		return Snapshot{}, actionError("NOT_CONFIRMING", "当前没有待确认的开局请求")
 	}
-	if _, ok := r.participants[p.id]; !ok {
+	if _, ok := r.participants[p.name]; !ok {
 		return Snapshot{}, actionError("NOT_PARTICIPANT", "你不在本次开局确认名单中")
 	}
 
@@ -430,11 +413,11 @@ func (r *Room) Confirm(token string, agreed bool) (Snapshot, error) {
 	return r.snapshotLocked(), nil
 }
 
-func (r *Room) CancelStart(token string) (Snapshot, error) {
+func (r *Room) CancelStart(name, key string) (Snapshot, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	p, err := r.playerByTokenLocked(token)
+	p, err := r.playerByNameLocked(name, key)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -451,11 +434,11 @@ func (r *Room) CancelStart(token string) (Snapshot, error) {
 	return r.snapshotLocked(), nil
 }
 
-func (r *Room) SelectGame(token, gameID string) (Snapshot, error) {
+func (r *Room) SelectGame(name, key, gameID string) (Snapshot, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	p, err := r.playerByTokenLocked(token)
+	p, err := r.playerByNameLocked(name, key)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -494,11 +477,11 @@ func (r *Room) SelectGame(token, gameID string) (Snapshot, error) {
 	return r.snapshotLocked(), nil
 }
 
-func (r *Room) ApplyGameAction(token string, action GameAction) (Snapshot, error) {
+func (r *Room) ApplyGameAction(name, key string, action GameAction) (Snapshot, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	p, err := r.playerByTokenLocked(token)
+	p, err := r.playerByNameLocked(name, key)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -546,11 +529,11 @@ func (r *Room) ApplyGameAction(token string, action GameAction) (Snapshot, error
 	}
 }
 
-func (r *Room) Reopen(token string) (Snapshot, error) {
+func (r *Room) Reopen(name, key string) (Snapshot, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	p, err := r.playerByTokenLocked(token)
+	p, err := r.playerByNameLocked(name, key)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -573,33 +556,35 @@ func (r *Room) Reopen(token string) (Snapshot, error) {
 	return r.snapshotLocked(), nil
 }
 
-// Subscribe authenticates an SSE connection and returns a stream of room events.
-func (r *Room) Subscribe(token string) (<-chan Event, func(), error) {
+// Subscribe attaches an SSE stream for a named player and always sends the current snapshot first.
+func (r *Room) Subscribe(name, key string) (<-chan Event, func(), error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	p, err := r.playerByTokenLocked(token)
+	p, err := r.playerByNameLocked(name, key)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	ch := make(chan Event, 8)
+	ch := make(chan Event, 16)
 	r.subscribers[ch] = struct{}{}
 
 	wasDisconnected := p.connections == 0
 	p.connections++
+	p.connected = true
 	if wasDisconnected {
-		p.connected = true
 		r.revision++
+	}
+	r.offerLocked(ch, Event{Type: "state", State: r.snapshotLocked()})
+	if wasDisconnected {
 		r.broadcastLocked("player_connected", fmt.Sprintf("%s 已上线", p.name))
-	} else {
-		r.offerLocked(ch, Event{Type: "state", State: r.snapshotLocked()})
 	}
 
 	var once sync.Once
+	playerName := p.name
 	cancel := func() {
 		once.Do(func() {
-			r.unsubscribe(p.id, ch)
+			r.unsubscribe(playerName, ch)
 		})
 	}
 	return ch, cancel, nil
@@ -626,7 +611,7 @@ func (r *Room) unsubscribe(playerID string, ch chan Event) {
 	message := fmt.Sprintf("%s 已离线，等待重连", p.name)
 	eventType := "player_disconnected"
 	if r.phase == PhaseConfirming {
-		if _, participant := r.participants[p.id]; participant {
+		if _, participant := r.participants[p.name]; participant {
 			r.cancelConfirmationLocked()
 			message = fmt.Sprintf("%s 已离线，本次开局确认已取消", p.name)
 			eventType = "confirmation_cancelled"
@@ -690,7 +675,7 @@ func (r *Room) flipCardLocked(p *player, index int) (Snapshot, error) {
 	game.revealed[index] = RevealedCard{
 		Index:     index,
 		Kind:      kind,
-		ActorID:   p.id,
+		ActorID:   p.name,
 		ActorName: p.name,
 	}
 	if kind == "drink" {
@@ -719,34 +704,30 @@ func (r *Room) recordGameActionLocked(actionType string, index int, kind string,
 		Type:      actionType,
 		Index:     index,
 		Kind:      kind,
-		ActorID:   p.id,
+		ActorID:   p.name,
 		ActorName: p.name,
 	}
 }
 
-func (r *Room) playerByTokenLocked(token string) (*player, error) {
-	if token == "" {
-		return nil, actionError("UNAUTHORIZED", "玩家会话无效，请重新加入房间")
+func (r *Room) playerByNameLocked(name, key string) (*player, error) {
+	cleanName, err := normalizeName(name)
+	if err != nil {
+		return nil, actionError("UNAUTHORIZED", "请先输入玩家名字")
 	}
-	playerID, ok := r.tokenIndex[token]
-	if !ok {
-		return nil, actionError("UNAUTHORIZED", "玩家会话已失效，请重新加入房间")
-	}
-	p, ok := r.players[playerID]
-	if !ok {
-		return nil, actionError("UNAUTHORIZED", "玩家会话已失效，请重新加入房间")
+	p, ok := r.players[cleanName]
+	if !ok || key == "" || key != p.key {
+		return nil, actionError("UNAUTHORIZED", "玩家身份无效，请重新加入房间")
 	}
 	return p, nil
 }
 
-func (r *Room) removePlayerLocked(playerID string) {
-	p, ok := r.players[playerID]
+func (r *Room) removePlayerLocked(playerName string) {
+	p, ok := r.players[playerName]
 	if !ok {
 		return
 	}
-	delete(r.players, playerID)
-	delete(r.tokenIndex, p.token)
-	delete(r.participants, playerID)
+	delete(r.players, playerName)
+	delete(r.participants, playerName)
 
 	for i, id := range r.order {
 		if id == playerID {
@@ -817,7 +798,7 @@ func (r *Room) snapshotLocked() Snapshot {
 			accepted++
 		}
 		players = append(players, PlayerView{
-			ID:        p.id,
+			ID:        p.name,
 			Name:      p.name,
 			Captain:   p.captain,
 			Connected: p.connected,
@@ -966,18 +947,15 @@ func (r *Room) broadcastLocked(eventType, message string) {
 func (r *Room) offerLocked(ch chan Event, event Event) {
 	select {
 	case ch <- event:
-		return
 	default:
-	}
-
-	select {
-	case <-ch:
-	default:
-	}
-
-	select {
-	case ch <- event:
-	default:
+		select {
+		case <-ch:
+		default:
+		}
+		select {
+		case ch <- event:
+		default:
+		}
 	}
 }
 
@@ -997,8 +975,8 @@ func normalizeName(name string) (string, error) {
 	return name, nil
 }
 
-func randomCredential(size int) (string, error) {
-	buffer := make([]byte, size)
+func randomKey() (string, error) {
+	buffer := make([]byte, 24)
 	if _, err := rand.Read(buffer); err != nil {
 		return "", err
 	}

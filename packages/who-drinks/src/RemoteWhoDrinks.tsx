@@ -54,8 +54,14 @@ interface RoomState {
 }
 
 interface GameResponse {
-  playerId: string
+  name: string
+  key: string
   state: RoomState
+}
+
+interface PlayerSeat {
+  name: string
+  key: string
 }
 
 interface RoomEvent {
@@ -90,7 +96,8 @@ export function getRemoteRoomParams(): RemoteRoomParams | null {
 
 export default function RemoteWhoDrinks({ roomCode, serverBase }: RemoteRoomParams) {
   const [state, setState] = useState<RoomState | null>(null)
-  const [playerId, setPlayerId] = useState('')
+  const [playerName, setPlayerName] = useState(() => readSeat(roomCode).name)
+  const [playerKey, setPlayerKey] = useState(() => readSeat(roomCode).key)
   const [connection, setConnection] = useState<'connecting' | 'online' | 'reconnecting'>('connecting')
   const [error, setError] = useState('')
   const [pendingAction, setPendingAction] = useState('')
@@ -103,8 +110,17 @@ export default function RemoteWhoDrinks({ roomCode, serverBase }: RemoteRoomPara
   }, [])
 
   useEffect(() => {
+    const seat = readSeat(roomCode)
+    if (!seat.name || !seat.key) {
+      window.location.replace(roomURL)
+      return
+    }
+    setPlayerName(seat.name)
+    setPlayerKey(seat.key)
+
     let disposed = false
     let source: EventSource | null = null
+    let retryTimer = 0
 
     const applyState = (next: RoomState) => {
       if (disposed) return
@@ -112,17 +128,20 @@ export default function RemoteWhoDrinks({ roomCode, serverBase }: RemoteRoomPara
     }
 
     const connect = async () => {
-      setConnection('connecting')
+      if (disposed) return
+      setConnection((current) => (current === 'online' ? 'reconnecting' : current))
       setError('')
+      source?.close()
       try {
-        const response = await roomRequest<GameResponse>(serverBase, roomCode, 'game')
+        const response = await roomRequest<GameResponse>(serverBase, roomCode, 'game', undefined, seat)
         if (disposed) return
-        setPlayerId(response.playerId)
+        setPlayerName(response.name)
         applyState(response.state)
 
-        source = new EventSource(roomEndpoint(serverBase, roomCode, 'events'), {
-          withCredentials: true,
-        })
+        const eventsURL = new URL(roomEndpoint(serverBase, roomCode, 'events'))
+        eventsURL.searchParams.set('name', seat.name)
+        eventsURL.searchParams.set('key', seat.key)
+        source = new EventSource(eventsURL)
         source.onopen = () => {
           if (!disposed) setConnection('online')
         }
@@ -136,22 +155,29 @@ export default function RemoteWhoDrinks({ roomCode, serverBase }: RemoteRoomPara
           }
         }
         source.onerror = () => {
-          if (!disposed) setConnection('reconnecting')
+          if (disposed) return
+          setConnection('reconnecting')
+          source?.close()
+          window.clearTimeout(retryTimer)
+          retryTimer = window.setTimeout(() => void connect(), 1000)
         }
       } catch (reason) {
         if (disposed) return
         const requestError = reason as RoomRequestError
         setError(requestError.message || '无法连接房间服务器')
         setConnection('reconnecting')
+        window.clearTimeout(retryTimer)
+        retryTimer = window.setTimeout(() => void connect(), 1000)
       }
     }
 
     void connect()
     return () => {
       disposed = true
+      window.clearTimeout(retryTimer)
       source?.close()
     }
-  }, [roomCode, serverBase])
+  }, [roomCode, roomURL, serverBase])
 
   useEffect(() => {
     if (!state) return
@@ -166,7 +192,7 @@ export default function RemoteWhoDrinks({ roomCode, serverBase }: RemoteRoomPara
     return result
   }, [state?.gameState?.revealed])
 
-  const self = state?.players.find((player) => player.id === playerId)
+  const self = state?.players.find((player) => player.name === playerName)
   const game = state?.gameState
   const lastAction = game?.lastAction
   const drinkPending = state?.phase === 'started' && game?.locked && lastAction?.kind === 'drink'
@@ -177,10 +203,13 @@ export default function RemoteWhoDrinks({ roomCode, serverBase }: RemoteRoomPara
     setPendingAction(`${type}:${index}`)
     setError('')
     try {
-      const response = await roomRequest<{ state: RoomState }>(serverBase, roomCode, 'game/action', {
-        type,
-        index,
-      })
+      const response = await roomRequest<{ state: RoomState }>(
+        serverBase,
+        roomCode,
+        'game/action',
+        { type, index },
+        { name: playerName, key: playerKey },
+      )
       setState((current) => (!current || response.state.revision >= current.revision ? response.state : current))
     } catch (reason) {
       setError((reason as Error).message || '游戏操作失败')
@@ -193,7 +222,7 @@ export default function RemoteWhoDrinks({ roomCode, serverBase }: RemoteRoomPara
     if (pendingAction) return
     setPendingAction('reopen')
     try {
-      await roomRequest(serverBase, roomCode, 'reopen', {})
+      await roomRequest(serverBase, roomCode, 'reopen', {}, { name: playerName, key: playerKey })
       window.location.assign(roomURL)
     } catch (reason) {
       setError((reason as Error).message || '重新开启房间失败')
@@ -257,7 +286,7 @@ export default function RemoteWhoDrinks({ roomCode, serverBase }: RemoteRoomPara
           {state.players.map((player) => (
             <span
               key={player.id}
-              className={`wd-player-chip${player.id === playerId ? ' is-self' : ''}${player.connected ? '' : ' is-offline'}`}
+              className={`wd-player-chip${player.name === playerName ? ' is-self' : ''}${player.connected ? '' : ' is-offline'}`}
             >
               {player.captain ? '♛ ' : ''}{player.name}
             </span>
@@ -394,18 +423,37 @@ function roomEndpoint(serverBase: string, roomCode: string, suffix: string) {
   return `${serverBase}/api/rooms/${encodeURIComponent(roomCode)}/${suffix}`
 }
 
+function seatKey(roomCode: string) {
+  return `@games/server/name/${roomCode}`
+}
+
+function readSeat(roomCode: string): PlayerSeat {
+  try {
+    const value = localStorage.getItem(seatKey(roomCode))
+    if (!value) return { name: '', key: '' }
+    if (value.startsWith('{')) return JSON.parse(value) as PlayerSeat
+    return { name: value, key: '' }
+  } catch {
+    return { name: '', key: '' }
+  }
+}
+
 async function roomRequest<T = unknown>(
   serverBase: string,
   roomCode: string,
   suffix: string,
   body?: unknown,
+  seat: PlayerSeat = { name: '', key: '' },
 ): Promise<T> {
   const response = await fetch(roomEndpoint(serverBase, roomCode, suffix), {
     method: body === undefined ? 'GET' : 'POST',
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    headers: {
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...(seat.name ? { 'X-Player-Name': seat.name } : {}),
+      ...(seat.key ? { 'X-Player-Key': seat.key } : {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: 'no-store',
-    credentials: 'include',
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {

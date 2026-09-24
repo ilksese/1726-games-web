@@ -16,7 +16,10 @@ import (
 	qrcode "github.com/skip2/go-qrcode"
 )
 
-const sessionCookieName = "games_room_session"
+const (
+	playerNameHeader = "X-Player-Name"
+	playerKeyHeader  = "X-Player-Key"
+)
 
 //go:embed static/index.html static/assets/*
 var staticFiles embed.FS
@@ -38,6 +41,7 @@ type Handler struct {
 
 type joinRequest struct {
 	Name string `json:"name"`
+	Key  string `json:"key,omitempty"`
 }
 
 type confirmRequest struct {
@@ -55,7 +59,8 @@ type stateResponse struct {
 }
 
 type joinResponse struct {
-	PlayerID  string        `json:"playerId"`
+	Name      string        `json:"name"`
+	Key       string        `json:"key"`
 	State     room.Snapshot `json:"state"`
 	InviteURL string        `json:"inviteUrl"`
 	Invites   InviteInfo    `json:"invites"`
@@ -151,13 +156,14 @@ func (h *Handler) getGame(w http.ResponseWriter, r *http.Request) {
 	if !h.ensureRoom(w, r) {
 		return
 	}
-	playerID, err := h.room.CurrentPlayerID(h.sessionToken(r))
-	if err != nil {
+	playerName, playerKey := h.playerIdentity(r)
+	if _, err := h.room.CurrentPlayer(playerName, playerKey); err != nil {
 		writeActionError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, joinResponse{
-		PlayerID:  playerID,
+		Name:      playerName,
+		Key:       playerKey,
 		State:     h.room.State(),
 		InviteURL: h.invites.PrimaryURL,
 		Invites:   h.invites,
@@ -175,22 +181,15 @@ func (h *Handler) join(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, state, err := h.room.Join(request.Name, h.sessionToken(r))
+	session, state, err := h.room.Join(request.Name, request.Key)
 	if err != nil {
 		writeActionError(w, err)
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    session.Token,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   7 * 24 * 60 * 60,
-	})
 	writeJSON(w, http.StatusOK, joinResponse{
-		PlayerID:  session.PlayerID,
+		Name:      session.Name,
+		Key:       session.Key,
 		State:     state,
 		InviteURL: h.invites.PrimaryURL,
 		Invites:   h.invites,
@@ -206,7 +205,8 @@ func (h *Handler) setConfig(w http.ResponseWriter, r *http.Request) {
 		writeActionError(w, err)
 		return
 	}
-	state, err := h.room.SetConfig(h.sessionToken(r), config)
+	name, key := h.playerIdentity(r)
+	state, err := h.room.SetConfig(name, key, config)
 	if err != nil {
 		writeActionError(w, err)
 		return
@@ -218,7 +218,8 @@ func (h *Handler) start(w http.ResponseWriter, r *http.Request) {
 	if !h.ensureRoom(w, r) {
 		return
 	}
-	state, err := h.room.RequestStart(h.sessionToken(r))
+	name, key := h.playerIdentity(r)
+	state, err := h.room.RequestStart(name, key)
 	if err != nil {
 		writeActionError(w, err)
 		return
@@ -230,7 +231,8 @@ func (h *Handler) cancelStart(w http.ResponseWriter, r *http.Request) {
 	if !h.ensureRoom(w, r) {
 		return
 	}
-	state, err := h.room.CancelStart(h.sessionToken(r))
+	name, key := h.playerIdentity(r)
+	state, err := h.room.CancelStart(name, key)
 	if err != nil {
 		writeActionError(w, err)
 		return
@@ -249,7 +251,8 @@ func (h *Handler) confirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := h.room.Confirm(h.sessionToken(r), request.Agree)
+	name, key := h.playerIdentity(r)
+	state, err := h.room.Confirm(name, key, request.Agree)
 	if err != nil {
 		writeActionError(w, err)
 		return
@@ -267,7 +270,8 @@ func (h *Handler) selectGame(w http.ResponseWriter, r *http.Request) {
 		writeActionError(w, err)
 		return
 	}
-	state, err := h.room.SelectGame(h.sessionToken(r), request.GameID)
+	name, key := h.playerIdentity(r)
+	state, err := h.room.SelectGame(name, key, request.GameID)
 	if err != nil {
 		writeActionError(w, err)
 		return
@@ -285,7 +289,8 @@ func (h *Handler) gameAction(w http.ResponseWriter, r *http.Request) {
 		writeActionError(w, err)
 		return
 	}
-	state, err := h.room.ApplyGameAction(h.sessionToken(r), action)
+	name, key := h.playerIdentity(r)
+	state, err := h.room.ApplyGameAction(name, key, action)
 	if err != nil {
 		writeActionError(w, err)
 		return
@@ -297,7 +302,8 @@ func (h *Handler) reopen(w http.ResponseWriter, r *http.Request) {
 	if !h.ensureRoom(w, r) {
 		return
 	}
-	state, err := h.room.Reopen(h.sessionToken(r))
+	name, key := h.playerIdentity(r)
+	state, err := h.room.Reopen(name, key)
 	if err != nil {
 		writeActionError(w, err)
 		return
@@ -309,20 +315,12 @@ func (h *Handler) leave(w http.ResponseWriter, r *http.Request) {
 	if !h.ensureRoom(w, r) {
 		return
 	}
-	state, err := h.room.Leave(h.sessionToken(r))
+	name, key := h.playerIdentity(r)
+	state, err := h.room.Leave(name, key)
 	if err != nil {
 		writeActionError(w, err)
 		return
 	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   -1,
-	})
 	writeJSON(w, http.StatusOK, stateResponse{State: state, InviteURL: h.invites.PrimaryURL, Invites: h.invites})
 }
 
@@ -331,7 +329,8 @@ func (h *Handler) events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	events, unsubscribe, err := h.room.Subscribe(h.sessionToken(r))
+	name, key := h.playerIdentity(r)
+	events, unsubscribe, err := h.room.Subscribe(name, key)
 	if err != nil {
 		writeActionError(w, err)
 		return
@@ -411,12 +410,16 @@ func (h *Handler) ensureRoom(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-func (h *Handler) sessionToken(r *http.Request) string {
-	cookie, err := r.Cookie(sessionCookieName)
-	if err != nil {
-		return ""
+func (h *Handler) playerIdentity(r *http.Request) (string, string) {
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
+	key := strings.TrimSpace(r.URL.Query().Get("key"))
+	if name == "" {
+		name = strings.TrimSpace(r.Header.Get(playerNameHeader))
 	}
-	return cookie.Value
+	if key == "" {
+		key = strings.TrimSpace(r.Header.Get(playerKeyHeader))
+	}
+	return name, key
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
@@ -440,7 +443,7 @@ func writeActionError(w http.ResponseWriter, err error) {
 
 	status := http.StatusConflict
 	switch actionErr.Code {
-	case "INVALID_NAME", "INVALID_REQUEST", "INVALID_GAME_CONFIG", "INVALID_CARD", "UNKNOWN_GAME_ACTION":
+	case "INVALID_NAME", "INVALID_REQUEST", "INVALID_GAME_CONFIG", "INVALID_CARD", "UNKNOWN_GAME_ACTION", "NAME_TAKEN":
 		status = http.StatusBadRequest
 	case "UNAUTHORIZED":
 		status = http.StatusUnauthorized
@@ -492,8 +495,7 @@ func (h *Handler) withCORS(next http.Handler) http.Handler {
 				return
 			}
 			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
-			w.Header().Set("Access-Control-Allow-Headers", "content-type")
+			w.Header().Set("Access-Control-Allow-Headers", "content-type, x-player-name, x-player-key")
 			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
 			w.Header().Add("Vary", "Origin")
 			if r.Method == http.MethodOptions {

@@ -18,9 +18,9 @@ func testRoom(options ...Options) *Room {
 	return New("123456", options[0])
 }
 
-func connectPlayer(t *testing.T, r *Room, token string) func() {
+func connectPlayer(t *testing.T, r *Room, name, key string) func() {
 	t.Helper()
-	_, cancel, err := r.Subscribe(token)
+	_, cancel, err := r.Subscribe(name, key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,8 +37,8 @@ func joinTwo(t *testing.T, r *Room) (Session, Session, func(), func()) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cancelCaptain := connectPlayer(t, r, captain.Token)
-	cancelMember := connectPlayer(t, r, member.Token)
+	cancelCaptain := connectPlayer(t, r, captain.Name, captain.Key)
+	cancelMember := connectPlayer(t, r, member.Name, member.Key)
 	return captain, member, cancelCaptain, cancelMember
 }
 
@@ -52,9 +52,19 @@ func TestFirstPlayerBecomesCaptain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, _, err := r.Join("甲", ""); errorCode(err) != "NAME_TAKEN" {
+		t.Fatalf("duplicate name error = %v, want NAME_TAKEN", err)
+	}
+	resumed, _, err := r.Join("甲", first.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.Key != first.Key {
+		t.Fatalf("resume key = %q, want %q", resumed.Key, first.Key)
+	}
 
-	if first.PlayerID == second.PlayerID {
-		t.Fatal("players should have different ids")
+	if first.Name == second.Name {
+		t.Fatal("players should have different names")
 	}
 	if len(state.Players) != 2 {
 		t.Fatalf("got %d players, want 2", len(state.Players))
@@ -70,17 +80,17 @@ func TestCaptainCanConfigureAndOnlyCaptainCanChangeConfig(t *testing.T) {
 	defer cancelCaptain()
 	defer cancelMember()
 
-	if _, err := r.SetConfig(member.Token, WhoDrinksConfig{Total: 20, Drinks: 4}); errorCode(err) != "NOT_CAPTAIN" {
+	if _, err := r.SetConfig(member.Name, member.Key, WhoDrinksConfig{Total: 20, Drinks: 4}); errorCode(err) != "NOT_CAPTAIN" {
 		t.Fatalf("member config error = %v, want NOT_CAPTAIN", err)
 	}
-	state, err := r.SetConfig(captain.Token, WhoDrinksConfig{Total: 20, Drinks: 4})
+	state, err := r.SetConfig(captain.Name, captain.Key, WhoDrinksConfig{Total: 20, Drinks: 4})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if state.Config != (WhoDrinksConfig{Total: 20, Drinks: 4}) {
 		t.Fatalf("config = %+v", state.Config)
 	}
-	if _, err := r.SetConfig(captain.Token, WhoDrinksConfig{Total: 1, Drinks: 1}); errorCode(err) != "INVALID_GAME_CONFIG" {
+	if _, err := r.SetConfig(captain.Name, captain.Key, WhoDrinksConfig{Total: 1, Drinks: 1}); errorCode(err) != "INVALID_GAME_CONFIG" {
 		t.Fatalf("invalid config error = %v, want INVALID_GAME_CONFIG", err)
 	}
 }
@@ -91,11 +101,11 @@ func TestAllConfirmationLeadsToCaptainGameSelection(t *testing.T) {
 	defer cancelCaptain()
 	defer cancelMember()
 
-	if _, err := r.RequestStart(member.Token); errorCode(err) != "NOT_CAPTAIN" {
+	if _, err := r.RequestStart(member.Name, member.Key); errorCode(err) != "NOT_CAPTAIN" {
 		t.Fatalf("member start error = %v, want NOT_CAPTAIN", err)
 	}
 
-	state, err := r.RequestStart(captain.Token)
+	state, err := r.RequestStart(captain.Name, captain.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +113,7 @@ func TestAllConfirmationLeadsToCaptainGameSelection(t *testing.T) {
 		t.Fatalf("unexpected confirmation state: %+v", state)
 	}
 
-	state, err = r.Confirm(captain.Token, true)
+	state, err = r.Confirm(captain.Name, captain.Key, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,18 +121,18 @@ func TestAllConfirmationLeadsToCaptainGameSelection(t *testing.T) {
 		t.Fatalf("game selection opened too early: %+v", state)
 	}
 
-	state, err = r.Confirm(member.Token, true)
+	state, err = r.Confirm(member.Name, member.Key, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if state.Phase != PhaseGameSelect || state.Confirmation.Accepted != 2 {
 		t.Fatalf("unexpected game selection state: %+v", state)
 	}
-	if _, err := r.SelectGame(member.Token, GameWhoDrinks); errorCode(err) != "NOT_CAPTAIN" {
+	if _, err := r.SelectGame(member.Name, member.Key, GameWhoDrinks); errorCode(err) != "NOT_CAPTAIN" {
 		t.Fatalf("member select error = %v, want NOT_CAPTAIN", err)
 	}
 
-	state, err = r.SelectGame(captain.Token, GameWhoDrinks)
+	state, err = r.SelectGame(captain.Name, captain.Key, GameWhoDrinks)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,16 +150,16 @@ func TestAllConfirmationLeadsToCaptainGameSelection(t *testing.T) {
 func startWhoDrinks(t *testing.T, r *Room) (Session, Session, func(), func()) {
 	t.Helper()
 	captain, member, cancelCaptain, cancelMember := joinTwo(t, r)
-	if _, err := r.RequestStart(captain.Token); err != nil {
+	if _, err := r.RequestStart(captain.Name, captain.Key); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Confirm(captain.Token, true); err != nil {
+	if _, err := r.Confirm(captain.Name, captain.Key, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Confirm(member.Token, true); err != nil {
+	if _, err := r.Confirm(member.Name, member.Key, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.SelectGame(captain.Token, GameWhoDrinks); err != nil {
+	if _, err := r.SelectGame(captain.Name, captain.Key, GameWhoDrinks); err != nil {
 		t.Fatal(err)
 	}
 	return captain, member, cancelCaptain, cancelMember
@@ -161,19 +171,19 @@ func TestCaptainCanCancelGameSelection(t *testing.T) {
 	defer cancelCaptain()
 	defer cancelMember()
 
-	if _, err := r.RequestStart(captain.Token); err != nil {
+	if _, err := r.RequestStart(captain.Name, captain.Key); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Confirm(captain.Token, true); err != nil {
+	if _, err := r.Confirm(captain.Name, captain.Key, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Confirm(member.Token, true); err != nil {
+	if _, err := r.Confirm(member.Name, member.Key, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.CancelStart(member.Token); errorCode(err) != "NOT_CAPTAIN" {
+	if _, err := r.CancelStart(member.Name, member.Key); errorCode(err) != "NOT_CAPTAIN" {
 		t.Fatalf("member cancel error = %v, want NOT_CAPTAIN", err)
 	}
-	state, err := r.CancelStart(captain.Token)
+	state, err := r.CancelStart(captain.Name, captain.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +201,7 @@ func TestWhoDrinksActionsAreServerAuthoritative(t *testing.T) {
 	state := r.State()
 	for index := 0; index < state.GameState.Total; index++ {
 		var err error
-		state, err = r.ApplyGameAction(member.Token, GameAction{Type: "flip", Index: index})
+		state, err = r.ApplyGameAction(member.Name, member.Key, GameAction{Type: "flip", Index: index})
 		if err != nil {
 			t.Fatalf("flip %d: %v", index, err)
 		}
@@ -206,7 +216,7 @@ func TestWhoDrinksActionsAreServerAuthoritative(t *testing.T) {
 			if !state.GameState.Locked {
 				t.Fatalf("drink card should lock game: %+v", state.GameState)
 			}
-			state, err = r.ApplyGameAction(captain.Token, GameAction{Type: "continue", Index: -1})
+			state, err = r.ApplyGameAction(captain.Name, captain.Key, GameAction{Type: "continue", Index: -1})
 			if err != nil {
 				t.Fatalf("continue after drink: %v", err)
 			}
@@ -219,7 +229,7 @@ func TestWhoDrinksActionsAreServerAuthoritative(t *testing.T) {
 	if state.Phase != PhaseFinished || state.GameState.RemainingDrinks != 0 {
 		t.Fatalf("game did not finish after revealing deck: %+v", state)
 	}
-	state, err := r.ApplyGameAction(captain.Token, GameAction{Type: "next-round", Index: -1})
+	state, err := r.ApplyGameAction(captain.Name, captain.Key, GameAction{Type: "next-round", Index: -1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,10 +249,10 @@ func TestDeclineAndTimeoutCancelConfirmation(t *testing.T) {
 	defer cancelCaptain()
 	defer cancelMember()
 
-	if _, err := r.RequestStart(captain.Token); err != nil {
+	if _, err := r.RequestStart(captain.Name, captain.Key); err != nil {
 		t.Fatal(err)
 	}
-	state, err := r.Confirm(member.Token, false)
+	state, err := r.Confirm(member.Name, member.Key, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +260,7 @@ func TestDeclineAndTimeoutCancelConfirmation(t *testing.T) {
 		t.Fatalf("decline should restore waiting state: %+v", state)
 	}
 
-	if _, err := r.RequestStart(captain.Token); err != nil {
+	if _, err := r.RequestStart(captain.Name, captain.Key); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(50 * time.Millisecond)
@@ -265,7 +275,7 @@ func TestCaptainIsPromotedAfterLeaving(t *testing.T) {
 	defer cancelMember()
 	cancelCaptain()
 
-	state, err := r.Leave(captain.Token)
+	state, err := r.Leave(captain.Name, captain.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +294,7 @@ func TestDisconnectCancelsConfirmationAndEventuallyRemovesPlayer(t *testing.T) {
 	captain, member, cancelCaptain, cancelMember := joinTwo(t, r)
 	defer cancelCaptain()
 
-	if _, err := r.RequestStart(captain.Token); err != nil {
+	if _, err := r.RequestStart(captain.Name, captain.Key); err != nil {
 		t.Fatal(err)
 	}
 	cancelMember()
@@ -307,11 +317,11 @@ func TestCaptainCanReopenFinishedRoom(t *testing.T) {
 	defer cancelCaptain()
 	defer cancelMember()
 
-	state, err := r.Reopen(member.Token)
+	state, err := r.Reopen(member.Name, member.Key)
 	if errorCode(err) != "NOT_CAPTAIN" || state.Phase != "" {
 		t.Fatalf("member reopen error = %v, state = %+v", err, state)
 	}
-	state, err = r.Reopen(captain.Token)
+	state, err = r.Reopen(captain.Name, captain.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
