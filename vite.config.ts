@@ -16,7 +16,7 @@ export default defineConfig({
   ],
   server: {
     host: true,
-    port: 5173,
+    port: Number(process.env.VITE_1726_GAME_PORT || 5173),
     strictPort: true,
     allowedHosts: ['.local'],
   },
@@ -31,6 +31,7 @@ export default defineConfig({
       '@games/game-b': resolve(__dirname, 'packages/game-b/src'),
       '@games/number-detective': resolve(__dirname, 'packages/number-detective/src'),
       '@games/who-drinks': resolve(__dirname, 'packages/who-drinks/src'),
+      '@games/wanxiang-mahjong': resolve(__dirname, 'packages/wanxiang-mahjong/src'),
     },
   },
 })

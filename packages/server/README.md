@@ -130,6 +130,7 @@ GET  /api/rooms/{code}/events
 
 ```text
 GET  /api/rooms/{code}/game
+GET  /api/rooms/{code}/game/hand
 POST /api/rooms/{code}/game/action
 ```
 
@@ -139,7 +140,13 @@ POST /api/rooms/{code}/game/action
 flip
 continue
 next-round
+win
+end-round
+respond
+play
 ```
+
+万象麻将的手牌不在 SSE 快照里。客户端用 `X-Player-Name` / `X-Player-Key` 调 `GET /api/rooms/{code}/game/hand`，只拿到自己的 `{"cards":[...]}`。
 
 ## 验证
 

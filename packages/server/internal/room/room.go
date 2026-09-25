@@ -24,8 +24,12 @@ const (
 )
 
 const (
-	GameWhoDrinks  = "who-drinks"
-	MaxRoomPlayers = 12
+	GameWhoDrinks       = "who-drinks"
+	GameWanxiangMahjong = "wanxiang-mahjong"
+	MaxRoomPlayers      = 12
+	wanxiangHandSize    = 3
+	wanxiangRounds      = 5
+	wanxiangVoteTimeout = 5 * time.Second
 )
 
 type ActionError struct {
@@ -110,6 +114,7 @@ type Snapshot struct {
 	SelectedGame   *GameSelection   `json:"selectedGame,omitempty"`
 	GameURL        string           `json:"gameUrl,omitempty"`
 	GameState      *WhoDrinksState  `json:"gameState,omitempty"`
+	Wanxiang       *WanxiangState   `json:"wanxiang,omitempty"`
 }
 
 type Event struct {
@@ -119,8 +124,46 @@ type Event struct {
 }
 
 type GameAction struct {
-	Type  string `json:"type"`
-	Index int    `json:"index"`
+	Type      string `json:"type"`
+	Index     int    `json:"index"`
+	Nominee   string `json:"nominee,omitempty"`
+	Agree     *bool  `json:"agree,omitempty"`
+	HandIndex int    `json:"handIndex,omitempty"`
+}
+
+type WanxiangSeatView struct {
+	Name      string `json:"name"`
+	Score     int    `json:"score"`
+	HandCount int    `json:"handCount"`
+}
+
+type WanxiangPlayedCard struct {
+	SkillID string `json:"skillId"`
+	Player  string `json:"player"`
+}
+
+type WanxiangVoteView struct {
+	Kind      string   `json:"kind"`
+	Proposer  string   `json:"proposer"`
+	Nominee   string   `json:"nominee,omitempty"`
+	OpenedAt  int64    `json:"openedAt"`
+	ExpiresAt int64    `json:"expiresAt"`
+	Agreed    []string `json:"agreed"`
+	Pending   []string `json:"pending"`
+}
+
+// WanxiangState is the public broadcast view. Hands stay server-side;
+// clients read their own cards from OwnHand / GET /game/hand.
+type WanxiangState struct {
+	Round     int                   `json:"round"`
+	Pool      int                   `json:"pool"`
+	Seats     []WanxiangSeatView    `json:"seats"`
+	Played    []WanxiangPlayedCard  `json:"played"`
+	Vote      *WanxiangVoteView     `json:"vote,omitempty"`
+}
+
+type WanxiangHand struct {
+	Cards []string `json:"cards"`
 }
 
 type Options struct {
@@ -151,6 +194,31 @@ type whoDrinksGame struct {
 	remainingDrinks int
 }
 
+type wanxiangSeat struct {
+	name  string
+	score int
+	hand  []string
+}
+
+type wanxiangVote struct {
+	kind     string
+	proposer string
+	nominee  string
+	openedAt time.Time
+	agreed   map[string]struct{}
+	timer    *time.Timer
+}
+
+type wanxiangGame struct {
+	round          int
+	pool           []string
+	order          []string
+	seats          map[string]*wanxiangSeat
+	played         []WanxiangPlayedCard
+	vote           *wanxiangVote
+	voteGeneration uint64
+}
+
 type Room struct {
 	mu                     sync.Mutex
 	code                   string
@@ -165,6 +233,7 @@ type Room struct {
 	config                 WhoDrinksConfig
 	selectedGame           *GameSelection
 	whoDrinks              *whoDrinksGame
+	wanxiang               *wanxiangGame
 	players                map[string]*player
 	order                  []string
 	participants           map[string]struct{}
@@ -465,16 +534,39 @@ func (r *Room) SelectGame(name, key, gameID string) (Snapshot, error) {
 		}
 	}
 
-	game, err := newWhoDrinksGame(r.config, 1)
-	if err != nil {
-		return Snapshot{}, fmt.Errorf("创建谁喝酒牌组: %w", err)
+	switch option.ID {
+	case GameWhoDrinks:
+		game, err := newWhoDrinksGame(r.config, 1)
+		if err != nil {
+			return Snapshot{}, fmt.Errorf("创建谁喝酒牌组: %w", err)
+		}
+		r.whoDrinks = game
+		r.wanxiang = nil
+	case GameWanxiangMahjong:
+		game, err := newWanxiangGame(participantNamesLocked(r))
+		if err != nil {
+			return Snapshot{}, fmt.Errorf("创建万象麻将牌组: %w", err)
+		}
+		r.wanxiang = game
+		r.whoDrinks = nil
+	default:
+		return Snapshot{}, actionError("UNKNOWN_GAME", "暂不支持这款游戏")
 	}
 	r.selectedGame = &GameSelection{ID: option.ID, Name: option.Name}
-	r.whoDrinks = game
 	r.phase = PhaseStarted
 	r.revision++
 	r.broadcastLocked("game_started", fmt.Sprintf("队长选择了%s，游戏开始", option.Name))
 	return r.snapshotLocked(), nil
+}
+
+func participantNamesLocked(r *Room) []string {
+	names := make([]string, 0, len(r.participants))
+	for _, name := range r.order {
+		if _, ok := r.participants[name]; ok {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 func (r *Room) ApplyGameAction(name, key string, action GameAction) (Snapshot, error) {
@@ -485,7 +577,13 @@ func (r *Room) ApplyGameAction(name, key string, action GameAction) (Snapshot, e
 	if err != nil {
 		return Snapshot{}, err
 	}
-	if r.selectedGame == nil || r.selectedGame.ID != GameWhoDrinks || r.whoDrinks == nil {
+	if r.selectedGame == nil {
+		return Snapshot{}, actionError("GAME_NOT_READY", "游戏还没有准备好")
+	}
+	if r.selectedGame.ID == GameWanxiangMahjong {
+		return r.applyWanxiangActionLocked(p, action)
+	}
+	if r.selectedGame.ID != GameWhoDrinks || r.whoDrinks == nil {
 		return Snapshot{}, actionError("GAME_NOT_READY", "游戏还没有准备好")
 	}
 
@@ -547,6 +645,7 @@ func (r *Room) Reopen(name, key string) (Snapshot, error) {
 	r.phase = PhaseWaiting
 	r.selectedGame = nil
 	r.whoDrinks = nil
+	r.clearWanxiangLocked()
 	r.participants = make(map[string]struct{})
 	for _, member := range r.players {
 		member.confirmed = false
@@ -730,7 +829,7 @@ func (r *Room) removePlayerLocked(playerName string) {
 	delete(r.participants, playerName)
 
 	for i, id := range r.order {
-		if id == playerID {
+		if id == playerName {
 			r.order = append(r.order[:i], r.order[i+1:]...)
 			break
 		}
@@ -743,6 +842,7 @@ func (r *Room) removePlayerLocked(playerName string) {
 		r.phase = PhaseWaiting
 		r.selectedGame = nil
 		r.whoDrinks = nil
+		r.clearWanxiangLocked()
 		r.participants = make(map[string]struct{})
 	}
 }
@@ -816,6 +916,10 @@ func (r *Room) snapshotLocked() Snapshot {
 	if r.whoDrinks != nil {
 		gameState = r.whoDrinks.view()
 	}
+	var wanxiang *WanxiangState
+	if r.wanxiang != nil {
+		wanxiang = r.wanxiang.view()
+	}
 
 	gameURL := ""
 	if selectedGame != nil {
@@ -833,6 +937,7 @@ func (r *Room) snapshotLocked() Snapshot {
 		SelectedGame:   selectedGame,
 		GameURL:        gameURL,
 		GameState:      gameState,
+		Wanxiang:       wanxiang,
 	}
 }
 
@@ -885,6 +990,13 @@ func availableGames() []GameOption {
 			Description: "多人同步翻牌，翻到酒杯的人喝一杯",
 			MinPlayers:  2,
 			MaxPlayers:  MaxRoomPlayers,
+		},
+		{
+			ID:          GameWanxiangMahjong,
+			Name:        "万象麻将",
+			Description: "技能牌对局，胡牌或结束本轮需全员表决",
+			MinPlayers:  2,
+			MaxPlayers:  4,
 		},
 	}
 }

@@ -4,6 +4,7 @@ import GameA from '@games/game-a'
 import GameB from '@games/game-b'
 import NumberDetective from '@games/number-detective'
 import WhoDrinks from '@games/who-drinks'
+import WanxiangMahjong from '@games/wanxiang-mahjong'
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
       <Route path="/game-b" element={<GameB />} />
       <Route path="/number-detective" element={<NumberDetective />} />
       <Route path="/who-drinks" element={<WhoDrinks />} />
+      <Route path="/wanxiang-mahjong" element={<WanxiangMahjong />} />
     </Routes>
   )
 }

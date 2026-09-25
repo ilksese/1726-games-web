@@ -88,22 +88,18 @@ func run() error {
 	}
 
 	mdnsURL := ""
-	preferredHost := cfg.advertiseHost
 	if mdnsAdvertisement != nil {
 		mdnsURL = mdnsAdvertisement.URL(cfg.roomCode)
-		preferredHost = mdnsAdvertisement.Hostname()
 	}
 	inviteURL := ipInviteURL
-	if mdnsURL != "" {
-		inviteURL = mdnsURL
-	}
 	if cfg.publicURL != "" {
 		inviteURL = configuredInviteURL
 	}
 
+	webPort := envOr("VITE_1726_GAME_PORT", "5173")
 	webURL := cfg.webURL
 	if webURL == "" {
-		webURL = "http://" + net.JoinHostPort(preferredHost, "5173")
+		webURL = "http://" + net.JoinHostPort(cfg.advertiseHost, webPort)
 	}
 	gameURLTemplate := cfg.gameURL
 	if gameURLTemplate == "" {
@@ -116,10 +112,12 @@ func run() error {
 	allowedOrigins := make([]string, 0, 3)
 	originCandidates := []string{
 		gameURLTemplate,
-		"http://" + net.JoinHostPort(cfg.advertiseHost, "5173"),
+		"http://" + net.JoinHostPort(cfg.advertiseHost, webPort),
+		"http://" + net.JoinHostPort("localhost", webPort),
+		"http://" + net.JoinHostPort("127.0.0.1", webPort),
 	}
 	if mdnsAdvertisement != nil {
-		originCandidates = append(originCandidates, "http://"+net.JoinHostPort(mdnsAdvertisement.Hostname(), "5173"))
+		originCandidates = append(originCandidates, "http://"+net.JoinHostPort(mdnsAdvertisement.Hostname(), webPort))
 	}
 	seenOrigins := make(map[string]struct{})
 	for _, candidate := range originCandidates {
@@ -216,7 +214,7 @@ func loadConfig(arguments []string) (config, error) {
 	flags.StringVar(&cfg.port, "port", envOr("PORT", "5174"), "监听端口")
 	flags.StringVar(&cfg.advertiseHost, "advertise-host", strings.TrimSpace(os.Getenv("ADVERTISE_HOST")), "二维码中使用的局域网主机名或 IP")
 	flags.StringVar(&cfg.publicURL, "public-url", strings.TrimSpace(os.Getenv("PUBLIC_URL")), "对外访问根地址，可使用 {code}、{port} 占位符")
-	flags.StringVar(&cfg.webURL, "web-url", strings.TrimSpace(os.Getenv("WEB_URL")), "游戏前端根地址，默认使用局域网主机的 5173 端口")
+	flags.StringVar(&cfg.webURL, "web-url", strings.TrimSpace(os.Getenv("WEB_URL")), "游戏前端根地址，默认使用局域网主机的 VITE_1726_GAME_PORT（默认 5173）")
 	flags.StringVar(&cfg.gameURL, "game-url", strings.TrimSpace(os.Getenv("GAME_URL")), "全员确认后跳转的游戏地址，可使用 {game}、{room} 占位符")
 	flags.StringVar(&cfg.roomCode, "room-code", defaultRoomCode, "固定 6 位房间号")
 	flags.BoolVar(&cfg.mdnsEnabled, "mdns", envBool("MDNS_ENABLED", true), "启用 mDNS 局域网域名")

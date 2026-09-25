@@ -45,6 +45,15 @@ export const games: Game[] = [
     description: '翻牌喝酒，杯杯见真情',
     color: '#c6283a',
   },
+  {
+    id: 'wanxiang-mahjong',
+    name: '万象麻将',
+    url: '/wanxiang-mahjong',
+    icon: '🀄',
+    tags: ['聚会', '麻将'],
+    description: '线下打牌，线上发技能、记胜次',
+    color: '#c45c3e',
+  },
 ]
 
 export function getGame(id: string): Game | null {

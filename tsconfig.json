@@ -21,7 +21,8 @@
       "@games/game-a": ["./packages/game-a/src/index.tsx"],
       "@games/game-b": ["./packages/game-b/src/index.tsx"],
       "@games/number-detective": ["./packages/number-detective/src/index.tsx"],
-      "@games/who-drinks": ["./packages/who-drinks/src/index.tsx"]
+      "@games/who-drinks": ["./packages/who-drinks/src/index.tsx"],
+      "@games/wanxiang-mahjong": ["./packages/wanxiang-mahjong/src/index.tsx"]
     }
   },
   "include": ["src", "packages", "vite.config.ts"]

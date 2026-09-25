@@ -120,6 +120,7 @@ func New(gameRoom *room.Room, invites InviteInfo, allowedOrigins []string) (http
 	mux.HandleFunc("POST /api/rooms/{code}/confirm", h.confirm)
 	mux.HandleFunc("POST /api/rooms/{code}/select-game", h.selectGame)
 	mux.HandleFunc("POST /api/rooms/{code}/game/action", h.gameAction)
+	mux.HandleFunc("GET /api/rooms/{code}/game/hand", h.gameHand)
 	mux.HandleFunc("POST /api/rooms/{code}/reopen", h.reopen)
 	mux.HandleFunc("POST /api/rooms/{code}/leave", h.leave)
 	mux.HandleFunc("GET /api/rooms/{code}/events", h.events)
@@ -298,6 +299,19 @@ func (h *Handler) gameAction(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, stateResponse{State: state, InviteURL: h.invites.PrimaryURL, Invites: h.invites})
 }
 
+func (h *Handler) gameHand(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureRoom(w, r) {
+		return
+	}
+	name, key := h.playerIdentity(r)
+	hand, err := h.room.OwnHand(name, key)
+	if err != nil {
+		writeActionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, hand)
+}
+
 func (h *Handler) reopen(w http.ResponseWriter, r *http.Request) {
 	if !h.ensureRoom(w, r) {
 		return
@@ -443,11 +457,11 @@ func writeActionError(w http.ResponseWriter, err error) {
 
 	status := http.StatusConflict
 	switch actionErr.Code {
-	case "INVALID_NAME", "INVALID_REQUEST", "INVALID_GAME_CONFIG", "INVALID_CARD", "UNKNOWN_GAME_ACTION", "NAME_TAKEN":
+	case "INVALID_NAME", "INVALID_REQUEST", "INVALID_GAME_CONFIG", "INVALID_CARD", "INVALID_NOMINEE", "UNKNOWN_GAME_ACTION", "NAME_TAKEN":
 		status = http.StatusBadRequest
 	case "UNAUTHORIZED":
 		status = http.StatusUnauthorized
-	case "NOT_CAPTAIN", "NOT_PARTICIPANT":
+	case "NOT_CAPTAIN", "NOT_PARTICIPANT", "NOT_VOTER":
 		status = http.StatusForbidden
 	case "ROOM_NOT_FOUND":
 		status = http.StatusNotFound

@@ -1,0 +1,158 @@
+.wx-app {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(196, 92, 62, 0.18), transparent 32%),
+    #1c1917;
+  color: #f5f0e8;
+  font-family: "Noto Serif SC", "Songti SC", serif;
+}
+
+.wx-shell {
+  width: min(920px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 72px 0 32px;
+}
+
+.wx-back {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(245, 240, 232, 0.2);
+  border-radius: 999px;
+  background: rgba(28, 25, 23, 0.8);
+  color: inherit;
+  text-decoration: none;
+}
+
+.wx-title {
+  margin: 0;
+  font-size: 32px;
+}
+
+.wx-muted {
+  color: #c4b8a5;
+}
+
+.wx-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wx-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.wx-seats {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin: 12px 0;
+  overflow-x: auto;
+}
+
+.wx-card,
+.wx-panel {
+  border: 1px solid rgba(245, 240, 232, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 16px;
+}
+
+.wx-seat {
+  width: max-content;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.wx-hand {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.wx-skill {
+  width: 148px;
+  min-height: 180px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 14px;
+  background: #f4efe6;
+  color: #292524;
+  text-align: left;
+  padding: 14px;
+}
+
+.wx-skill strong,
+.wx-panel strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.wx-seat strong {
+  margin-bottom: 2px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.wx-seat span {
+  display: block;
+  white-space: nowrap;
+}
+
+.wx-skill span,
+.wx-panel span {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.wx-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: #c45c3e;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.wx-ghost {
+  background: transparent;
+  border: 1px solid rgba(245, 240, 232, 0.24);
+}
+
+.wx-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(12, 10, 9, 0.72);
+}
+
+.wx-dialog .wx-panel {
+  width: min(420px, 100%);
+  background: #292524;
+}

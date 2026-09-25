@@ -1,6 +1,7 @@
 package room
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -327,6 +328,140 @@ func TestCaptainCanReopenFinishedRoom(t *testing.T) {
 	}
 	if state.Phase != PhaseWaiting || state.SelectedGame != nil || state.GameState != nil {
 		t.Fatalf("room was not reopened: %+v", state)
+	}
+}
+
+func startWanxiang(t *testing.T, r *Room) (Session, Session, func(), func()) {
+	t.Helper()
+	captain, member, cancelCaptain, cancelMember := joinTwo(t, r)
+	if _, err := r.RequestStart(captain.Name, captain.Key); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Confirm(captain.Name, captain.Key, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Confirm(member.Name, member.Key, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.SelectGame(captain.Name, captain.Key, GameWanxiangMahjong); err != nil {
+		t.Fatal(err)
+	}
+	return captain, member, cancelCaptain, cancelMember
+}
+
+func TestWanxiangPlayAndWinStayPrivate(t *testing.T) {
+	r := testRoom()
+	captain, member, cancelCaptain, cancelMember := startWanxiang(t, r)
+	defer cancelCaptain()
+	defer cancelMember()
+
+	state := r.State()
+	if state.Phase != PhaseStarted || state.Wanxiang == nil || state.GameState != nil {
+		t.Fatalf("wanxiang did not start: %+v", state)
+	}
+	if state.Wanxiang.Round != 0 || state.Wanxiang.Pool != 54 {
+		t.Fatalf("deal mismatch: %+v", state.Wanxiang)
+	}
+	for _, seat := range state.Wanxiang.Seats {
+		if seat.HandCount != 3 || seat.Score != 0 {
+			t.Fatalf("seat not dealt: %+v", seat)
+		}
+	}
+
+	captainHand, err := r.OwnHand(captain.Name, captain.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	memberHand, err := r.OwnHand(member.Name, member.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	playedSkill := captainHand.Cards[0]
+
+	events, _, err := r.Subscribe(captain.Name, captain.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-events
+
+	state, err = r.ApplyGameAction(captain.Name, captain.Key, GameAction{Type: "play", HandIndex: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Wanxiang.Played) != 1 || state.Wanxiang.Played[0].SkillID != playedSkill || state.Wanxiang.Played[0].Player != captain.Name {
+		t.Fatalf("played card mismatch: %+v", state.Wanxiang.Played)
+	}
+	afterPlay, err := r.OwnHand(captain.Name, captain.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(afterPlay.Cards) != 2 {
+		t.Fatalf("hand not reduced: %+v", afterPlay.Cards)
+	}
+
+	agree := true
+	state, err = r.ApplyGameAction(member.Name, member.Key, GameAction{Type: "win", Nominee: captain.Name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Wanxiang.Vote == nil || state.Wanxiang.Vote.Kind != "win" || state.Wanxiang.Vote.Nominee != captain.Name {
+		t.Fatalf("vote not opened: %+v", state.Wanxiang.Vote)
+	}
+	if _, err := r.ApplyGameAction(captain.Name, captain.Key, GameAction{Type: "play", HandIndex: 0}); errorCode(err) != "PLAY_NOT_ALLOWED" {
+		t.Fatalf("play during vote error = %v, want PLAY_NOT_ALLOWED", err)
+	}
+
+	state, err = r.ApplyGameAction(captain.Name, captain.Key, GameAction{Type: "respond", Agree: &agree})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Wanxiang.Vote != nil || state.Wanxiang.Round != 1 || state.Phase != PhaseStarted {
+		t.Fatalf("win vote did not pass: %+v", state.Wanxiang)
+	}
+	var winnerScore int
+	for _, seat := range state.Wanxiang.Seats {
+		if seat.Name == captain.Name {
+			winnerScore = seat.Score
+		}
+		if seat.HandCount != 3 {
+			t.Fatalf("hand not refilled: %+v", seat)
+		}
+	}
+	if winnerScore != 1 {
+		t.Fatalf("winner score = %d, want 1", winnerScore)
+	}
+	refilled, err := r.OwnHand(captain.Name, captain.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refilled.Cards) != 3 {
+		t.Fatalf("private hand not refilled: %+v", refilled.Cards)
+	}
+
+	var broadcast Event
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case broadcast = <-events:
+		case <-deadline:
+			t.Fatal("timed out waiting for broadcast")
+		}
+		if broadcast.State.Wanxiang != nil && broadcast.State.Wanxiang.Round == 1 {
+			break
+		}
+	}
+	encoded, err := json.Marshal(broadcast.State)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshotText := string(encoded)
+	for _, skill := range memberHand.Cards {
+		if strings.Contains(snapshotText, `"`+skill+`"`) {
+			t.Fatalf("broadcast snapshot leaked hand id %q: %s", skill, snapshotText)
+		}
+	}
+	if strings.Contains(snapshotText, `"cards"`) {
+		t.Fatalf("broadcast snapshot included private cards: %s", snapshotText)
 	}
 }
 

@@ -35,6 +35,7 @@ const elements = {
   leaveButton: document.querySelector("#leaveButton"),
   gameSelectView: document.querySelector("#gameSelectView"),
   whoDrinksOption: document.querySelector("#whoDrinksOption"),
+  wanxiangOption: document.querySelector("#wanxiangOption"),
   gameSelectHint: document.querySelector("#gameSelectHint"),
   cancelStartButton: document.querySelector("#cancelStartButton"),
   startedView: document.querySelector("#startedView"),
@@ -149,6 +150,18 @@ function bindEvents() {
       showToast(error.message, true)
     } finally {
       setButtonBusy(elements.whoDrinksOption, false)
+    }
+  })
+
+  elements.wanxiangOption.addEventListener("click", async () => {
+    setButtonBusy(elements.wanxiangOption, true, "准备游戏…")
+    try {
+      const data = await api("select-game", { gameId: "wanxiang-mahjong" })
+      applyState(data.state)
+    } catch (error) {
+      showToast(error.message, true)
+    } finally {
+      setButtonBusy(elements.wanxiangOption, false)
     }
   })
 
@@ -490,6 +503,8 @@ function renderGameSelect(state, self) {
 
   const option = state.availableGames?.find((game) => game.id === "who-drinks")
   elements.whoDrinksOption.disabled = !self.captain || !option
+  const wanxiang = state.availableGames?.find((game) => game.id === "wanxiang-mahjong")
+  if (elements.wanxiangOption) elements.wanxiangOption.disabled = !self.captain || !wanxiang
   elements.gameSelectHint.textContent = self.captain
     ? "选择后所有玩家会进入同一个谁喝酒牌局。"
     : "等待队长选择谁喝酒。"
@@ -584,7 +599,10 @@ async function respondToConfirmation(agree) {
 
 function enterConfiguredGame() {
   if (!currentState?.gameUrl) return
-  window.location.assign(resolveGameURL(currentState.gameUrl))
+  const gameURL = new URL(resolveGameURL(currentState.gameUrl), window.location.href)
+  if (currentPlayerName) gameURL.searchParams.set("name", currentPlayerName)
+  if (currentPlayerKey) gameURL.searchParams.set("key", currentPlayerKey)
+  window.location.assign(gameURL.toString())
 }
 
 function resolveGameURL(value) {
@@ -704,12 +722,13 @@ async function api(action, body) {
 }
 
 async function apiBase(suffix, body) {
-  const response = await fetch(`/api/rooms/${encodeURIComponent(roomCode)}${suffix}`, {
+  const endpoint = new URL(`/api/rooms/${encodeURIComponent(roomCode)}${suffix}`, window.location.origin)
+  if (currentPlayerName) endpoint.searchParams.set("name", currentPlayerName)
+  if (currentPlayerKey) endpoint.searchParams.set("key", currentPlayerKey)
+  const response = await fetch(endpoint, {
     method: body === undefined ? (suffix ? "POST" : "GET") : "POST",
     headers: {
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-      ...(currentPlayerName ? { "X-Player-Name": currentPlayerName } : {}),
-      ...(currentPlayerKey ? { "X-Player-Key": currentPlayerKey } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",

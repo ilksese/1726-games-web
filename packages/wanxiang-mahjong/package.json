@@ -1,0 +1,9 @@
+{
+  "name": "@games/wanxiang-mahjong",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@games/shared": "workspace:*",
+    "react": "^19"
+  }
+}
