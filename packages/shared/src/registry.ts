@@ -10,24 +10,6 @@ export interface Game {
 
 export const games: Game[] = [
   {
-    id: 'game-a',
-    name: '游戏A',
-    url: '/game-a',
-    icon: '🎮',
-    tags: ['策略'],
-    description: '首个游戏，敬请期待',
-    color: '#6366f1',
-  },
-  {
-    id: 'game-b',
-    name: '游戏B',
-    url: '/game-b',
-    icon: '🎯',
-    tags: ['动作'],
-    description: '第二个游戏，开发中',
-    color: '#ec4899',
-  },
-  {
     id: 'number-detective',
     name: '数字侦探',
     url: '/number-detective',

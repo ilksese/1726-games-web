@@ -6,26 +6,37 @@ import (
 	"time"
 )
 
-var wanxiangSkills = []string{
-	"no-pung",
-	"no-kong",
-	"no-chow",
-	"no-win",
-	"no-dots",
-	"no-bams",
-	"no-chars",
-	"no-honors",
-	"no-draw",
-	"no-ready",
-	"no-meld-in",
-	"no-remeld",
+type wanxiangSkill struct {
+	id       string
+	maxCount int
+}
+
+var wanxiangScopes = []string{"this", "next-draw"}
+var wanxiangActions = []string{"pung", "kong", "discard"}
+var wanxiangSuits = []string{"chars", "bams", "dots", "honors"}
+
+func wanxiangSkills() []wanxiangSkill {
+	skills := []wanxiangSkill{
+		{id: "ward", maxCount: 5},
+		{id: "rob", maxCount: 5},
+		{id: "swap", maxCount: 5},
+	}
+	for _, scope := range wanxiangScopes {
+		for _, action := range wanxiangActions {
+			for _, suit := range wanxiangSuits {
+				skills = append(skills, wanxiangSkill{id: scope + ":" + action + ":" + suit, maxCount: 5})
+			}
+		}
+	}
+	return skills
 }
 
 func newWanxiangGame(names []string) (*wanxiangGame, error) {
-	pool := make([]string, 0, len(wanxiangSkills)*5)
-	for _, skill := range wanxiangSkills {
-		for copy := 0; copy < 5; copy++ {
-			pool = append(pool, skill)
+	skills := wanxiangSkills()
+	pool := make([]string, 0, len(skills)*5)
+	for _, skill := range skills {
+		for copy := 0; copy < skill.maxCount; copy++ {
+			pool = append(pool, skill.id)
 		}
 	}
 	if err := shuffleStrings(pool); err != nil {
@@ -214,6 +225,28 @@ func (r *Room) passWanxiangVoteLocked() {
 			seat.hand = append(seat.hand, game.pool[0])
 			game.pool = game.pool[1:]
 		}
+	}
+}
+
+func (r *Room) dropWanxiangSeatLocked(name string) {
+	game := r.wanxiang
+	if game == nil || game.seats[name] == nil {
+		return
+	}
+	delete(game.seats, name)
+	order := game.order[:0]
+	for _, seatName := range game.order {
+		if seatName != name {
+			order = append(order, seatName)
+		}
+	}
+	game.order = order
+	vote := game.vote
+	if vote == nil || name == vote.proposer || !r.wanxiangPending(vote, name) {
+		return
+	}
+	if r.wanxiangAllAgreedLocked(vote) {
+		r.passWanxiangVoteLocked()
 	}
 }
 

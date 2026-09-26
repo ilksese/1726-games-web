@@ -27,7 +27,6 @@
   "dependencies": {
     "events": "^3.3.0",
     "jotai": "^2",
-    "pixi.js": "^8",
     "process": "^0.11.10",
     "react": "^19",
     "react-dom": "^19",

@@ -27,8 +27,6 @@ export default defineConfig({
     alias: {
       '@games/shared': resolve(__dirname, 'packages/shared/src'),
       '@games/lobby': resolve(__dirname, 'packages/lobby/src'),
-      '@games/game-a': resolve(__dirname, 'packages/game-a/src'),
-      '@games/game-b': resolve(__dirname, 'packages/game-b/src'),
       '@games/number-detective': resolve(__dirname, 'packages/number-detective/src'),
       '@games/who-drinks': resolve(__dirname, 'packages/who-drinks/src'),
       '@games/wanxiang-mahjong': resolve(__dirname, 'packages/wanxiang-mahjong/src'),

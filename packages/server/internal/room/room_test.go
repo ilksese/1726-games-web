@@ -359,7 +359,7 @@ func TestWanxiangPlayAndWinStayPrivate(t *testing.T) {
 	if state.Phase != PhaseStarted || state.Wanxiang == nil || state.GameState != nil {
 		t.Fatalf("wanxiang did not start: %+v", state)
 	}
-	if state.Wanxiang.Round != 0 || state.Wanxiang.Pool != 54 {
+	if state.Wanxiang.Round != 0 || state.Wanxiang.Pool != 129 {
 		t.Fatalf("deal mismatch: %+v", state.Wanxiang)
 	}
 	for _, seat := range state.Wanxiang.Seats {
@@ -455,8 +455,13 @@ func TestWanxiangPlayAndWinStayPrivate(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshotText := string(encoded)
+	played := map[string]int{}
+	for _, card := range broadcast.State.Wanxiang.Played {
+		played[card.SkillID]++
+	}
 	for _, skill := range memberHand.Cards {
-		if strings.Contains(snapshotText, `"`+skill+`"`) {
+		leaked := strings.Count(snapshotText, `"`+skill+`"`)
+		if leaked > played[skill] {
 			t.Fatalf("broadcast snapshot leaked hand id %q: %s", skill, snapshotText)
 		}
 	}

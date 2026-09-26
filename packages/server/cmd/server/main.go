@@ -211,7 +211,7 @@ func loadConfig(arguments []string) (config, error) {
 
 	cfg := config{}
 	flags.StringVar(&cfg.bindAddress, "bind", envOr("BIND_ADDRESS", "0.0.0.0"), "监听地址")
-	flags.StringVar(&cfg.port, "port", envOr("PORT", "5174"), "监听端口")
+	flags.StringVar(&cfg.port, "port", envOr("VITE_1726_SERVER_PORT", envOr("PORT", "5174")), "监听端口")
 	flags.StringVar(&cfg.advertiseHost, "advertise-host", strings.TrimSpace(os.Getenv("ADVERTISE_HOST")), "二维码中使用的局域网主机名或 IP")
 	flags.StringVar(&cfg.publicURL, "public-url", strings.TrimSpace(os.Getenv("PUBLIC_URL")), "对外访问根地址，可使用 {code}、{port} 占位符")
 	flags.StringVar(&cfg.webURL, "web-url", strings.TrimSpace(os.Getenv("WEB_URL")), "游戏前端根地址，默认使用局域网主机的 VITE_1726_GAME_PORT（默认 5173）")

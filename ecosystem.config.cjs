@@ -21,6 +21,7 @@ module.exports = {
       interpreter: 'none',
       env: {
         VITE_1726_GAME_PORT: process.env.VITE_1726_GAME_PORT || '5173',
+        VITE_1726_SERVER_PORT: process.env.VITE_1726_SERVER_PORT || '5174',
       },
       autorestart: true,
       watch: false,

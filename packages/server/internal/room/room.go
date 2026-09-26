@@ -838,6 +838,7 @@ func (r *Room) removePlayerLocked(playerName string) {
 	if p.captain && len(r.order) > 0 {
 		r.players[r.order[0]].captain = true
 	}
+	r.dropWanxiangSeatLocked(playerName)
 	if len(r.order) == 0 {
 		r.phase = PhaseWaiting
 		r.selectedGame = nil

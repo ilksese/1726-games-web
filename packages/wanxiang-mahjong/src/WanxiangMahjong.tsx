@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { getGame, recordPlay } from '@games/shared'
 import RemoteTable, { getRemoteRoomParams } from './RemoteTable'
+import WoodGrain from './WoodGrain'
 import TableView from './TableView'
 import { createTable, reduce, type TableAction, type TableState } from './game/table'
+import { keepAwake } from './keepAwake'
 import './style.css'
 
 const STORE_KEY = '@games/wanxiang-mahjong/table'
@@ -18,6 +20,7 @@ function loadTable(): TableState {
 }
 
 export default function WanxiangMahjong() {
+  useEffect(() => keepAwake(), [])
   const remoteRoom = getRemoteRoomParams()
   if (remoteRoom) return <RemoteTable {...remoteRoom} />
   return <LocalTable />
@@ -53,15 +56,18 @@ function LocalTable() {
 
   return (
     <main className="wx-app">
+      <WoodGrain />
       <a className="wx-back" href="/" aria-label="返回大厅">←</a>
-      <div className="wx-shell">
+      <div className="wx-board">
         {seated ? <TableView state={state} selfId={selfId} now={now} onAction={dispatch} /> : (
-          <form className="wx-panel" onSubmit={(event) => { event.preventDefault(); dispatch({ type: 'join', playerId: selfId, name }) }}>
+          <div className="wx-join-wrap">
+          <form className="wx-panel wx-join" onSubmit={(event) => { event.preventDefault(); dispatch({ type: 'join', playerId: selfId, name }) }}>
             <h1 className="wx-title">加入万象麻将</h1>
             <p className="wx-muted">这一桌存在这台浏览器里。朋友把手机递过来，各自用自己的名字加入。</p>
-            <input value={name} onChange={(event) => setName(event.target.value)} maxLength={20} placeholder="你的名字" aria-label="你的名字" style={{ width: '100%', margin: '16px 0', padding: 12, borderRadius: 12, border: 0 }} />
+            <input className="wx-input" value={name} onChange={(event) => setName(event.target.value)} maxLength={20} placeholder="你的名字" aria-label="你的名字" />
             <button type="submit" disabled={!name.trim() || state.seats.length >= 4}>坐下</button>
           </form>
+          </div>
         )}
       </div>
     </main>

@@ -1,158 +1,422 @@
 .wx-app {
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at top, rgba(196, 92, 62, 0.18), transparent 32%),
-    #1c1917;
-  color: #f5f0e8;
-  font-family: "Noto Serif SC", "Songti SC", serif;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: #1a120c;
+  color: #f6e7c1;
+  font-family: "Songti SC", "Noto Serif SC", serif;
+  caret-color: #e2c27a;
 }
 
-.wx-shell {
-  width: min(920px, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 72px 0 32px;
+.wx-app ::selection {
+  background: #8f1d24;
+  color: #f6e7c1;
+}
+
+.wx-wood {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.55;
 }
 
 .wx-back {
   position: fixed;
-  top: 16px;
-  left: 16px;
-  z-index: 20;
+  top: calc(14px + env(safe-area-inset-top));
+  left: calc(14px + env(safe-area-inset-left));
+  z-index: 5;
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid rgba(245, 240, 232, 0.2);
+  width: 36px;
+  height: 36px;
+  border: 1px solid #c6a15a;
   border-radius: 999px;
-  background: rgba(28, 25, 23, 0.8);
-  color: inherit;
+  background: rgba(26, 18, 12, 0.82);
+  color: #f6e7c1;
   text-decoration: none;
+}
+
+.wx-board {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  width: min(480px, 100%);
+  height: 100dvh;
+  margin: 0 auto;
+  padding:
+    calc(16px + env(safe-area-inset-top))
+    calc(14px + env(safe-area-inset-right))
+    calc(28px + env(safe-area-inset-bottom))
+    calc(14px + env(safe-area-inset-left));
+}
+
+.wx-top,
+.wx-felt,
+.wx-dock {
+  position: relative;
+  z-index: 1;
+}
+
+.wx-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 0 8px 46px;
 }
 
 .wx-title {
   margin: 0;
-  font-size: 32px;
+  font-size: 18px;
+  line-height: 1.1;
 }
 
 .wx-muted {
-  color: #c4b8a5;
+  margin: 2px 0 0;
+  color: #c6a15a;
+  font-size: 12px;
 }
 
-.wx-row {
+.wx-rivals {
   display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.wx-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  margin: 20px 0;
-}
-
-.wx-seats {
-  display: flex;
-  flex-wrap: nowrap;
   gap: 8px;
-  margin: 12px 0;
+  min-width: 0;
   overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.wx-card,
-.wx-panel {
-  border: 1px solid rgba(245, 240, 232, 0.14);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.04);
-  padding: 16px;
+.wx-app .wx-end {
+  min-height: 32px;
+  padding: 4px 10px;
+  border-color: #8a6730;
+  background: transparent;
+  color: #c6a15a;
+  font-size: 12px;
 }
 
-.wx-seat {
-  width: max-content;
+.wx-app .wx-avatar {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #f6e7c1;
+}
+
+.wx-avatar span {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #c6a15a;
+  border-radius: 999px;
+  background: #3c1016;
+  font-size: 16px;
+}
+
+.wx-avatar strong,
+.wx-avatar em {
+  max-width: 72px;
+  font-style: normal;
+  font-size: 11px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.wx-avatar em {
+  color: #e2c27a;
+}
+
+.wx-avatar.is-picked span {
+  box-shadow: 0 0 0 2px #e2c27a;
+}
+
+.wx-felt {
+  display: grid;
+  align-items: end;
+  min-height: 0;
+}
+
+.wx-river {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+  width: 100%;
+  padding: 8px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.wx-tile {
+  display: grid;
   flex: 0 0 auto;
-  border-radius: 12px;
-  padding: 8px 10px;
+  gap: 2px;
+  width: 108px;
+  padding: 8px;
+  border: 1px solid #8a6730;
+  border-radius: 8px;
+  background: rgba(42, 27, 18, 0.88);
+}
+
+.wx-tile-seal {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #e2c27a;
+  border-radius: 999px;
+  color: #f6e7c1;
+  font-size: 14px;
+}
+
+.wx-tile strong,
+.wx-tile span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wx-tile strong {
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: normal;
+}
+
+.wx-tile span {
+  color: #e2c27a;
+  font-size: 11px;
+}
+
+.wx-river::-webkit-scrollbar,
+.wx-hand::-webkit-scrollbar,
+.wx-rivals::-webkit-scrollbar {
+  height: 4px;
+}
+
+.wx-river::-webkit-scrollbar-thumb,
+.wx-hand::-webkit-scrollbar-thumb,
+.wx-rivals::-webkit-scrollbar-thumb {
+  background: #8a6730;
+  border-radius: 999px;
+}
+
+.wx-empty {
+  margin: auto;
+  color: #c6a15a;
+  font-size: 13px;
+}
+
+.wx-dock {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
 }
 
 .wx-hand {
   display: flex;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
   overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .wx-skill {
-  width: 148px;
-  min-height: 180px;
+  width: 118px;
+  height: 165px;
   flex: 0 0 auto;
+  padding: 0;
   border: 0;
-  border-radius: 14px;
-  background: #f4efe6;
-  color: #292524;
-  text-align: left;
-  padding: 14px;
+  border-radius: 10px;
+  background: transparent;
 }
 
-.wx-skill strong,
-.wx-panel strong {
+.wx-face {
   display: block;
-  margin-bottom: 8px;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 8px 8px rgba(12, 8, 5, 0.4));
 }
 
-.wx-seat strong {
-  margin-bottom: 2px;
-  font-size: 14px;
-  white-space: nowrap;
+.wx-skill.is-picked {
+  transform: translateY(-14px);
 }
 
-.wx-seat span {
-  display: block;
-  white-space: nowrap;
+.wx-skill.is-picked .wx-face {
+  filter: drop-shadow(0 0 5px #e2c27a) drop-shadow(0 12px 10px rgba(12, 8, 5, 0.5));
 }
 
-.wx-skill span,
-.wx-panel span {
+.wx-face-name,
+.wx-face-mark,
+.wx-face-seal {
+  font-family: "Songti SC", "Noto Serif SC", serif;
+  text-anchor: middle;
+}
+
+.wx-face-name {
+  fill: #f6e7c1;
   font-size: 13px;
-  line-height: 1.5;
+  font-weight: 700;
+}
+
+.wx-face-mark {
+  fill: #f6e7c1;
+  font-size: 11px;
+}
+
+.wx-face-seal {
+  fill: #f4efe4;
+  font-size: 42px;
+  font-weight: 700;
+}
+
+.wx-face-copy {
+  margin: 0;
+  color: #3c1016;
+  font: 12px/1.25 "Songti SC", "Noto Serif SC", serif;
+  text-align: center;
 }
 
 .wx-actions {
   display: flex;
-  flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
 }
 
-button {
-  font: inherit;
-  color: inherit;
-  border: 0;
+.wx-app button {
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid #e2c27a;
   border-radius: 999px;
-  padding: 10px 14px;
-  background: #c45c3e;
+  background: #8f1d24;
+  color: #f6e7c1;
+  font: inherit;
   cursor: pointer;
+  white-space: nowrap;
 }
 
-button:disabled {
+.wx-app .wx-skill,
+.wx-app .wx-avatar {
+  min-height: 44px;
+}
+
+.wx-app .wx-skill {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.wx-effect,
+.wx-banner {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(26, 18, 12, 0.86);
+  color: #f6e7c1;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.wx-banner {
+  border: 1px solid #c6a15a;
+}
+
+.wx-ghost {
+  background: rgba(26, 18, 12, 0.8);
+}
+
+.wx-app button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
 
-.wx-ghost {
-  background: transparent;
-  border: 1px solid rgba(245, 240, 232, 0.24);
+.wx-app button:focus-visible,
+.wx-app a:focus-visible {
+  outline: 2px solid #e2c27a;
+  outline-offset: 3px;
 }
 
 .wx-dialog {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: 8;
   display: grid;
-  place-items: center;
-  padding: 20px;
-  background: rgba(12, 10, 9, 0.72);
+  place-items: end center;
+  padding:
+    calc(16px + env(safe-area-inset-top))
+    calc(16px + env(safe-area-inset-right))
+    calc(24px + env(safe-area-inset-bottom))
+    calc(16px + env(safe-area-inset-left));
+  background: rgba(12, 8, 5, 0.62);
 }
 
 .wx-dialog .wx-panel {
-  width: min(420px, 100%);
-  background: #292524;
+  width: min(360px, 100%);
+  padding: 16px;
+  border: 1px solid #c6a15a;
+  border-radius: 12px;
+  background: #2a1b12;
+}
+
+.wx-panel strong,
+.wx-panel span {
+  display: block;
+}
+
+.wx-panel span,
+.wx-panel p {
+  margin: 6px 0 12px;
+  color: #e2c27a;
+  overflow-wrap: anywhere;
+}
+
+.wx-join-wrap {
+  display: grid;
+  align-content: center;
+  min-height: 0;
+}
+
+.wx-join,
+.wx-panel {
+  border: 1px solid #c6a15a;
+  border-radius: 12px;
+  background: rgba(42, 27, 18, 0.92);
+  padding: 16px;
+}
+
+.wx-input {
+  width: 100%;
+  margin: 12px 0;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #f6efe2;
+  color: #1c1917;
+  font: inherit;
+}
+
+@media (min-width: 768px) {
+  .wx-skill,
+  .wx-skill.is-picked {
+    width: 112px;
+    height: 157px;
+  }
+
+  .wx-dialog {
+    place-items: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wx-skill.is-picked {
+    transform: none;
+  }
 }

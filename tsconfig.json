@@ -18,8 +18,6 @@
     "paths": {
       "@games/shared": ["./packages/shared/src/index.ts"],
       "@games/lobby": ["./packages/lobby/src/index.tsx"],
-      "@games/game-a": ["./packages/game-a/src/index.tsx"],
-      "@games/game-b": ["./packages/game-b/src/index.tsx"],
       "@games/number-detective": ["./packages/number-detective/src/index.tsx"],
       "@games/who-drinks": ["./packages/who-drinks/src/index.tsx"],
       "@games/wanxiang-mahjong": ["./packages/wanxiang-mahjong/src/index.tsx"]

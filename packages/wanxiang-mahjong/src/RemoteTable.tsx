@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
 import { getGame, recordPlay } from '@games/shared'
+import DiscardTile from './DiscardTile'
+import SkillCard from './SkillCard'
+import WoodGrain from './WoodGrain'
+import { skillById } from './game/cards'
 
 interface RemoteRoomParams {
   roomCode: string
@@ -75,21 +79,6 @@ interface RoomEvent {
   message?: string
 }
 
-const SKILLS: Record<string, { name: string; effect: string }> = {
-  'no-pung': { name: '禁止碰牌', effect: '指定一名玩家，直到这一轮结束，禁止碰牌。' },
-  'no-kong': { name: '禁止杠牌', effect: '指定一名玩家，直到这一轮结束，禁止杠牌。' },
-  'no-chow': { name: '禁止吃牌', effect: '指定一名玩家，直到这一轮结束，禁止吃牌。' },
-  'no-win': { name: '禁止胡牌', effect: '指定一名玩家，直到这一轮结束，禁止胡牌。' },
-  'no-dots': { name: '禁止筒子', effect: '指定一名玩家，直到这一轮结束，禁止筒子。' },
-  'no-bams': { name: '禁止条子', effect: '指定一名玩家，直到这一轮结束，禁止条子。' },
-  'no-chars': { name: '禁止万子', effect: '指定一名玩家，直到这一轮结束，禁止万子。' },
-  'no-honors': { name: '禁止字牌', effect: '指定一名玩家，直到这一轮结束，禁止字牌。' },
-  'no-draw': { name: '禁止摸牌', effect: '指定一名玩家，直到这一轮结束，禁止摸牌。' },
-  'no-ready': { name: '禁止听牌', effect: '指定一名玩家，直到这一轮结束，禁止听牌。' },
-  'no-meld-in': { name: '禁止入鸣', effect: '指定一名玩家，直到这一轮结束，禁止入鸣。' },
-  'no-remeld': { name: '禁止换鸣', effect: '指定一名玩家，直到这一轮结束，禁止换鸣。' },
-}
-
 class RoomRequestError extends Error {
   status: number
 
@@ -123,8 +112,20 @@ export default function RemoteTable({ roomCode, serverBase }: RemoteRoomParams) 
   const [connection, setConnection] = useState<'connecting' | 'online' | 'reconnecting'>('connecting')
   const [error, setError] = useState('')
   const [pendingAction, setPendingAction] = useState('')
+  const [pendingPlay, setPendingPlay] = useState<number | null>(null)
+  const [nominee, setNominee] = useState<string | null>(null)
+  const [confirmEnd, setConfirmEnd] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
 
   const roomURL = `${serverBase}/room/${encodeURIComponent(roomCode)}`
+  const game = state?.wanxiang
+  const voteOpen = Boolean(game?.vote)
+
+  useEffect(() => {
+    if (!voteOpen) return
+    const timer = window.setInterval(() => setNow(Date.now()), 250)
+    return () => window.clearInterval(timer)
+  }, [voteOpen])
 
   useEffect(() => {
     getGame('wanxiang-mahjong')
@@ -215,7 +216,6 @@ export default function RemoteTable({ roomCode, serverBase }: RemoteRoomParams) 
     }
   }, [roomURL, state])
 
-  const game = state?.wanxiang
   const seats = game?.seats || []
   const vote = game?.vote
   const busy = Boolean(pendingAction)
@@ -249,11 +249,11 @@ export default function RemoteTable({ roomCode, serverBase }: RemoteRoomParams) 
   if (error && !state) {
     return (
       <main className="wx-app">
-        <div className="wx-shell">
+        <div className="wx-board">
           <section className="wx-panel">
-            <h1 className="wx-title">无法进入牌桌</h1>
-            <p>{error}</p>
-            <a className="wx-back" href={roomURL} style={{ position: 'static', width: 'auto', padding: '0 14px' }}>返回房间</a>
+            <h1 className="wx-title">进不了牌桌</h1>
+            <p>{friendlyError(error)}</p>
+            <a href={roomURL}>返回房间</a>
           </section>
         </div>
       </main>
@@ -263,79 +263,104 @@ export default function RemoteTable({ roomCode, serverBase }: RemoteRoomParams) 
   if (!state || !game || state.selectedGame?.id !== 'wanxiang-mahjong') {
     return (
       <main className="wx-app">
-        <div className="wx-shell">
+        <div className="wx-board">
           <section className="wx-panel">
-            <h1 className="wx-title">正在同步牌桌</h1>
-            <p className="wx-muted">{error || '等待房间服务器发送游戏状态…'}</p>
+            <h1 className="wx-title">正在连上牌桌</h1>
+            <p className="wx-muted">{error ? friendlyError(error) : '房间还没把这一桌发过来。'}</p>
+            <a href={roomURL}>返回房间</a>
           </section>
         </div>
       </main>
     )
   }
 
+  const others = seats.filter((seat) => seat.name !== playerName)
+  const selfSeat = seats.find((seat) => seat.name === playerName)
+  const pickedSkill = pendingPlay !== null && hand[pendingPlay] ? labelSkill(hand[pendingPlay]) : null
+  const canVote = Boolean(vote && vote.pending.includes(playerName) && vote.proposer !== playerName)
+  const secondsLeft = vote?.kind === 'win' ? Math.max(0, Math.ceil((vote.expiresAt - now) / 1000)) : 0
+  const linkLabel = connection === 'online' ? '已连接' : connection === 'connecting' ? '连接中' : '重连中'
+
   return (
     <main className="wx-app">
+      <WoodGrain />
       <a className="wx-back" href={roomURL} aria-label="返回房间">←</a>
-      <div className="wx-shell">
-        <header className="wx-row">
+      <div className="wx-board">
+        <header className="wx-top">
           <div>
-            <h1 className="wx-title">万象麻将</h1>
-            <p className="wx-muted">第 {(game.round ?? 0) + 1} 轮 · {connection === 'online' ? '同步中' : connection === 'connecting' ? '连接中' : '重连中'}</p>
+            <h1 className="wx-title">第 {(game.round ?? 0) + 1} / 5 轮</h1>
+            <p className="wx-muted">{linkLabel}{selfSeat ? ` · ${selfSeat.score ?? 0} 胜` : ''}</p>
           </div>
-        </header>
-        {error ? <p role="alert">{error}</p> : null}
-        {handNote ? <p className="wx-muted">{handNote}</p> : null}
-        {game.flash ? <p>{game.flash}</p> : null}
-        <section className="wx-seats">
-          {seats.map((seat) => (
-            <article className="wx-panel wx-seat" key={seat.id || seat.name}>
-              <strong>{seat.name}{seat.name === playerName ? ' · 我' : ''}</strong>
-              <span>{seat.score ?? 0} 胜 · 剩余 {handCount(seat)} 张</span>
-              {seat.name === playerName ? (
-                <div className="wx-actions" style={{ marginTop: 6 }}>
-                  <button type="button" disabled={busy} onClick={() => void perform({ type: 'win', nominee: playerName })}>我赢了</button>
-                </div>
-              ) : null}
-            </article>
-          ))}
-        </section>
-        <section>
-          <div className="wx-row">
-            <h2>我的技能</h2>
-            <button type="button" className="wx-ghost" disabled={busy} onClick={() => void perform({ type: 'end-round' })}>本轮结束</button>
-          </div>
-          <div className="wx-hand">
-            {hand.map((skillId, index) => {
-              const skill = labelSkill(skillId)
+          <button type="button" className="wx-end" disabled={busy || pendingPlay !== null || nominee !== null} onClick={() => setConfirmEnd(true)}>结束本轮</button>
+          <div className="wx-rivals">
+            {others.map((seat) => {
+              const picked = nominee === seat.name
               return (
-                <button className="wx-skill" type="button" key={`${skillId}-${index}`} disabled={busy} onClick={() => void perform({ type: 'play', handIndex: index })}>
-                  <strong>{skill.name}</strong>
-                  <span>{skill.effect}</span>
+                <button className={`wx-avatar${picked ? ' is-picked' : ''}`} type="button" key={seat.id || seat.name} disabled={busy || pendingPlay !== null} aria-pressed={picked} onClick={() => setNominee(picked ? null : seat.name)}>
+                  <span aria-hidden="true">{seat.name.slice(0, 1)}</span>
+                  <strong>{seat.name}</strong>
+                  <em>{seat.score ?? 0}</em>
                 </button>
               )
             })}
           </div>
-        </section>
-        <section>
-          <h2>牌桌</h2>
-          <div className="wx-grid">
-            {(game.played || []).map((card, index) => {
+        </header>
+        {error ? <p className="wx-banner" role="alert">{error}</p> : null}
+        {handNote ? <p className="wx-muted">{handNote}</p> : null}
+        <section className="wx-felt" aria-label="牌河">
+          <div className="wx-river">
+            {(game.played || []).length === 0 ? <p className="wx-empty">还没人出技能</p> : [...(game.played || [])].reverse().map((card, index) => {
               const skill = labelSkill(card.skillId)
-              return (
-                <article className="wx-panel" key={`${card.player}-${index}`}>
-                  <strong>{skill.name}</strong>
-                  <span>{card.player} 打出。{skill.effect}</span>
-                </article>
-              )
+              return <DiscardTile key={`${card.player}-${card.skillId}-${index}`} name={skill.name} displayName={skill.displayName} player={card.player} />
             })}
           </div>
         </section>
+        <section className="wx-dock">
+          {pickedSkill ? <p className="wx-effect">{pickedSkill.effect}</p> : null}
+          <div className="wx-hand">
+            {hand.map((skillId, index) => {
+              const skill = labelSkill(skillId)
+              const picked = pendingPlay === index
+              return (
+                <button className={`wx-skill${picked ? ' is-picked' : ''}`} type="button" key={`${skillId}-${index}`} disabled={busy} aria-pressed={picked} aria-label={`${skill.name}。${skill.effect}`} onClick={() => { setNominee(null); setPendingPlay(picked ? null : index) }}>
+                  <SkillCard name={skill.name} displayName={skill.displayName} />
+                </button>
+              )
+            })}
+          </div>
+          <div className="wx-actions">
+            {pickedSkill ? (
+              <>
+                <button type="button" disabled={busy} onClick={() => { const index = pendingPlay; setPendingPlay(null); void perform({ type: 'play', handIndex: index }) }}>打出</button>
+                <button type="button" className="wx-ghost" disabled={busy} onClick={() => setPendingPlay(null)}>取消</button>
+              </>
+            ) : nominee ? (
+              <>
+                <button type="button" disabled={busy} onClick={() => { const name = nominee; setNominee(null); void perform({ type: 'win', nominee: name }) }}>记 {nominee} 一胜</button>
+                <button type="button" className="wx-ghost" disabled={busy} onClick={() => setNominee(null)}>取消</button>
+              </>
+            ) : null}
+          </div>
+        </section>
       </div>
-      {vote ? (
-        <div className="wx-dialog" role="dialog" aria-modal="true" style={{ zIndex: 80 }}>
+      {confirmEnd ? (
+        <div className="wx-dialog" role="dialog" aria-modal="true" aria-labelledby="wx-end-title">
+          <div className="wx-panel">
+            <strong id="wx-end-title">结束这一轮？</strong>
+            <span>其他人必须点同意才会结束。没有自动通过。一人拒绝就留在这一轮。</span>
+            <div className="wx-actions">
+              <button type="button" disabled={busy} onClick={() => { setConfirmEnd(false); void perform({ type: 'end-round' }) }}>发起结束</button>
+              <button type="button" className="wx-ghost" disabled={busy} onClick={() => setConfirmEnd(false)}>留下</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {vote && canVote ? (
+        <div className="wx-dialog" role="dialog" aria-modal="true">
           <div className="wx-panel">
             <strong>{voteTitle(vote)}</strong>
-            <span>{vote.kind === 'win' ? '5 秒内不点算同意。' : '结束这一轮需要你点同意。'}</span>
+            <span>{voteCopy(vote, secondsLeft)}</span>
+            {vote.pending.length ? <p className="wx-muted">还没点：{vote.pending.join('、')}</p> : null}
             <div className="wx-actions">
               <button type="button" disabled={busy} onClick={() => void perform({ type: 'respond', agree: true })}>同意</button>
               <button type="button" className="wx-ghost" disabled={busy} onClick={() => void perform({ type: 'respond', agree: false })}>拒绝</button>
@@ -343,14 +368,25 @@ export default function RemoteTable({ roomCode, serverBase }: RemoteRoomParams) 
           </div>
         </div>
       ) : null}
+      {vote && !canVote ? <p className="wx-banner">{vote.pending.length ? `等 ${vote.pending.join('、')} 点同意。这一笔没完，不能再发起。` : `${voteTitle(vote)}。这一笔还没完。`}</p> : null}
     </main>
   )
 }
 
 function voteTitle(vote: VoteState): string {
   if (vote.kind === 'end-round') return `${vote.proposer} 要结束这一轮`
-  if (vote.kind === 'win') return `${vote.proposer} 说 ${vote.nominee || '这手'} 赢了`
+  if (vote.kind === 'win') return `${vote.proposer} 记 ${vote.nominee || '这手'} 一胜`
   return `${vote.proposer} 发起了表决`
+}
+
+function voteCopy(vote: VoteState, secondsLeft: number): string {
+  if (vote.kind === 'end-round') return '必须点同意才会结束。没有自动通过。一人拒绝就取消。'
+  return `${secondsLeft} 秒内不点，视为同意。${vote.nominee || '被提名的人'} +1，无人扣分。一人拒绝就取消。`
+}
+
+function friendlyError(message: string): string {
+  if (/failed to fetch|network|load failed/i.test(message)) return '连不上房间。检查同一网络后再试，或返回房间重新进入。'
+  return message
 }
 
 function handCount(seat: SeatState): number {
@@ -358,8 +394,8 @@ function handCount(seat: SeatState): number {
   return seat.hand?.length || 0
 }
 
-function labelSkill(id: string): { name: string; effect: string } {
-  return SKILLS[id] || { name: id || '技能', effect: '指定一名玩家，直到这一轮结束，禁止这一项。' }
+function labelSkill(id: string) {
+  return skillById(id)
 }
 
 async function loadHand(
